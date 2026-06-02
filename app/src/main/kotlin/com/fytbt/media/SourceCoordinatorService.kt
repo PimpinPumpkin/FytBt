@@ -7,6 +7,9 @@ import android.app.Service
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.session.MediaSession
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
@@ -55,6 +58,14 @@ class SourceCoordinatorService : Service() {
     private val listenerComponent by lazy {
         ComponentName(applicationContext, FytNotificationListener::class.java)
     }
+    private val audioManager by lazy {
+        applicationContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    }
+    private var focusRequest: AudioFocusRequest? = null
+    // We NEVER react to focus changes (see FINDINGS.md §6 — the A2DP sink grabs/releases focus as
+    // normal playback, so reacting to a loss would kill the very audio we want). We request focus
+    // only to *evict* a local app that's still holding it; the listener is a deliberate no-op.
+    private val focusListener = AudioManager.OnAudioFocusChangeListener { /* no-op by design */ }
     private var scope: CoroutineScope? = null
 
     // True while the phone (Bluetooth) is paused BECAUSE the MCU left Bluetooth.
@@ -80,17 +91,45 @@ class SourceCoordinatorService : Service() {
 
     override fun onDestroy() {
         runCatching { syu.unbind() }
+        releaseFocus()
         scope?.cancel()
         scope = null
         Log.i(TAG, "SourceCoordinatorService destroyed")
         super.onDestroy()
     }
 
+    /** Hold AUDIOFOCUS_GAIN to evict any local app still holding focus when Bluetooth resumes. */
+    private fun acquireFocus() {
+        val am = audioManager ?: return
+        if (focusRequest != null) return // already held
+        val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+            )
+            .setOnAudioFocusChangeListener(focusListener)
+            .setWillPauseWhenDucked(false)
+            .build()
+        runCatching { am.requestAudioFocus(req) }
+        focusRequest = req
+    }
+
+    private fun releaseFocus() {
+        val am = audioManager ?: return
+        focusRequest?.let { runCatching { am.abandonAudioFocusRequest(it) } }
+        focusRequest = null
+    }
+
     /**
-     * Reconcile playback to the new MCU source. See the class doc for the model. Pure
-     * [android.media.session.MediaController] transport calls — no audio-focus games, because on
-     * this unit the MCU source selection (APP_ID), not Android audio focus, governs what is audible
-     * (APP_ID 3 ⇒ Bluetooth is already routed to the speakers, so a plain play() is enough).
+     * Reconcile playback to the new MCU source. See the class doc for the model. Mostly plain
+     * [android.media.session.MediaController] transport calls — the MCU source selection (APP_ID),
+     * not Android audio focus, governs *routing*. The ONE place focus matters: a local player we
+     * paused (e.g. Symphony) can keep HOLDING Android audio focus, which suppresses the Bluetooth
+     * sink output even though APP_ID is now 3 — so on a BT resume we request GAIN to evict it (see
+     * [acquireFocus]). We never *react* to focus changes (the sink toggles focus during normal
+     * playback; reacting would kill our own audio — FINDINGS.md §6).
      */
     private fun coordinate(appId: Int) {
         val sessions = runCatching { msm?.getActiveSessions(listenerComponent) }.getOrNull() ?: return
@@ -103,19 +142,27 @@ class SourceCoordinatorService : Service() {
         else null
 
         // --- The phone over Bluetooth -------------------------------------------------
-        if (bt != null) {
-            val btPlaying = bt.playbackState?.state == PlaybackState.STATE_PLAYING
-            if (btIsSource) {
-                if (btPausedByMcu) {
-                    btPausedByMcu = false
-                    runCatching { bt.transportControls.play() }
-                    Log.i(TAG, "source -> Bluetooth: resume phone")
-                }
-            } else if (btPlaying) {
+        if (btIsSource) {
+            if (bt != null && btPausedByMcu) {
+                btPausedByMcu = false
+                // CRITICAL: grab audio focus BEFORE resuming. A local player we paused (e.g.
+                // Symphony) can keep HOLDING Android audio focus, which suppresses the Bluetooth
+                // sink output even though the MCU source is now Bluetooth — the phone "plays" but
+                // is silent until something evicts that stale focus holder. Requesting GAIN here
+                // evicts it immediately (verified: Symphony abandons focus the instant we request),
+                // so audio comes out at once instead of after a ~10s limbo. See FINDINGS.md §3/§5.
+                acquireFocus()
+                runCatching { bt.transportControls.play() }
+                Log.i(TAG, "source -> Bluetooth: resume phone")
+            }
+        } else {
+            if (bt != null && bt.playbackState?.state == PlaybackState.STATE_PLAYING) {
                 runCatching { bt.transportControls.pause() }
                 btPausedByMcu = true
                 Log.i(TAG, "source -> appId=$appId: pause phone (Bluetooth)")
             }
+            // We're no longer the Bluetooth source — don't keep holding focus.
+            releaseFocus()
         }
 
         // --- On-unit players (Spotify-on-unit, local music) ---------------------------
