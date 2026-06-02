@@ -20,27 +20,77 @@ object OnlineArt {
     private const val TAG = "FytBt"
     private val urlCache = HashMap<String, String?>()  // key -> artwork URL (null = looked up, no match)
 
-    /** Returns a hi-res artwork URL for the track, or null if none found / no query possible. */
+    /**
+     * Returns a hi-res artwork URL for the track, or null if none found / no confident match.
+     * Fetches several candidates and verifies the result's artist + title actually match what we
+     * asked for — taking iTunes' first result blindly was pulling wrong albums. A weak match
+     * returns null (placeholder) rather than showing the wrong cover.
+     */
     fun lookupArtworkUrl(artist: String?, title: String?): String? {
         val query = buildQuery(artist, title) ?: return null
         synchronized(urlCache) { if (urlCache.containsKey(query)) return urlCache[query] }
+        val wantTitle = norm(title)
+        val wantArtist = norm(artist?.substringBefore(','))
         val result = runCatching {
             val endpoint = "https://itunes.apple.com/search?term=" +
-                URLEncoder.encode(query, "UTF-8") + "&entity=song&limit=1"
+                URLEncoder.encode(query, "UTF-8") + "&entity=song&limit=12"
             val body = httpGet(endpoint) ?: return@runCatching null
-            val results = JSONObject(body).optJSONArray("results")
-            if (results == null || results.length() == 0) return@runCatching null
-            val art100 = results.getJSONObject(0).optString("artworkUrl100", "")
-            if (art100.isBlank()) null
-            // 100x100 thumbnail URL → ask for a big version instead.
-            else art100.replace("100x100bb", "600x600bb")
+            val results = JSONObject(body).optJSONArray("results") ?: return@runCatching null
+
+            var bestUrl: String? = null
+            var bestScore = 0.0
+            for (i in 0 until results.length()) {
+                val r = results.getJSONObject(i)
+                val art = r.optString("artworkUrl100", "")
+                if (art.isBlank()) continue
+                val titleScore = tokenOverlap(wantTitle, norm(r.optString("trackName")))
+                val artistScore = tokenOverlap(wantArtist, norm(r.optString("artistName")))
+                // Title carries most of the weight; artist confirms it's the right release.
+                val score = titleScore * 0.65 + artistScore * 0.35
+                if (score > bestScore) {
+                    bestScore = score
+                    bestUrl = art.replace("100x100bb", "600x600bb")
+                }
+            }
+            // Confident match required: most of the title words present AND the artist at least
+            // partially matches (or, if we had no artist to check, a strong title match alone).
+            val confident = bestScore >= 0.5 &&
+                (wantArtist.isBlank() || tokenOverlapAtBest(results, wantArtist) >= 0.34)
+            if (confident) bestUrl else null
         }.getOrElse {
             Log.w(TAG, "iTunes art lookup failed: ${it.message}")
             null
         }
         synchronized(urlCache) { urlCache[query] = result }
-        if (result != null) Log.i(TAG, "online art match for \"$query\"")
+        Log.i(TAG, if (result != null) "online art match for \"$query\"" else "no confident art match for \"$query\"")
         return result
+    }
+
+    /** Best artist-token overlap across all results (used as a sanity gate). */
+    private fun tokenOverlapAtBest(results: org.json.JSONArray, wantArtist: String): Double {
+        var best = 0.0
+        for (i in 0 until results.length()) {
+            val a = norm(results.getJSONObject(i).optString("artistName"))
+            best = maxOf(best, tokenOverlap(wantArtist, a))
+        }
+        return best
+    }
+
+    /** Fraction of [want]'s word-tokens that appear in [have]. 1.0 = all present. */
+    private fun tokenOverlap(want: String, have: String): Double {
+        val w = want.split(' ').filter { it.isNotBlank() }
+        if (w.isEmpty()) return 0.0
+        val h = have.split(' ').filter { it.isNotBlank() }.toSet()
+        return w.count { it in h }.toDouble() / w.size
+    }
+
+    /** Lowercase, drop the noise clean() leaves, strip to alphanumerics+spaces for comparison. */
+    private fun norm(s: String?): String {
+        if (s.isNullOrBlank()) return ""
+        return clean(s).lowercase()
+            .replace(Regex("[^a-z0-9 ]"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
     }
 
     fun download(urlString: String): Bitmap? = runCatching {

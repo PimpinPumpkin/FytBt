@@ -4,6 +4,9 @@ A no-root replacement Bluetooth UI for the FYT (Feiyiteng) head unit, targeting 
 broken stock `com.syu.bt`. Side-loads as a normal user app; coexists with the SYU stock
 apps rather than replacing them.
 
+> **Designed and tested on a 1024×768 vertical "Tesla-style" head-unit screen** (portrait,
+> 768 px wide × 1024 px tall). The whole UI assumes that tall, narrow, finger-operated layout.
+
 See `spec.md` (or the original build spec) for the full set of verified device facts
 and constraints. The short version:
 

@@ -14,8 +14,15 @@ import java.io.File
 object ArtCache {
     private const val TAG = "FytBt"
 
+    // Bumped to v2 when the matching logic changed — abandons any wrongly-matched art cached by the
+    // old (take-first-result) lookup so those tracks re-fetch with the verified matcher.
     private fun dir(context: Context): File =
-        File(context.filesDir, "artcache").apply { if (!exists()) mkdirs() }
+        File(context.filesDir, "artcache_v2").apply {
+            if (!exists()) {
+                mkdirs()
+                runCatching { File(context.filesDir, "artcache").deleteRecursively() }
+            }
+        }
 
     private fun fileFor(context: Context, key: String): File =
         File(dir(context), Integer.toHexString(key.lowercase().hashCode()) + ".jpg")
