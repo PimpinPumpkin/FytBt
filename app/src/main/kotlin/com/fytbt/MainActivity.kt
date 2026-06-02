@@ -15,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import com.fytbt.bt.BluetoothController
 import com.fytbt.media.NowPlayingController
+import com.fytbt.media.SourceCoordinatorService
 import com.fytbt.ui.BluetoothScreen
 import com.fytbt.ui.ContactsScreen
 import com.fytbt.ui.NowPlayingScreen
@@ -110,6 +111,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         controller = BluetoothController(applicationContext)
         nowPlaying = NowPlayingController(applicationContext)
+        // Keep MCU-source auto-pause alive even when our UI is backgrounded/destroyed.
+        SourceCoordinatorService.start(applicationContext)
         permsGranted.value = permissionsGranted()
         refreshPhonePerms()
         fallbackAccent.value = prefs.getInt("fallback_accent", DEFAULT_ACCENT)
