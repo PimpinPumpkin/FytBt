@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.fytbt.media.ArtColors
@@ -35,6 +36,7 @@ enum class Pane { NowPlaying, Phone, Contacts, Bluetooth }
 @Composable
 fun RootScreen(
     artColors: ArtColors?,
+    fallbackAccent: Int,
     nowPlayingContent: @Composable () -> Unit,
     phoneContent: @Composable () -> Unit,
     contactsContent: @Composable () -> Unit,
@@ -58,13 +60,16 @@ fun RootScreen(
                     Pane.Bluetooth -> bluetoothContent()
                 }
             }
-            BottomTabs(selected = pane, artColors = artColors, onSelect = { pane = it })
+            BottomTabs(selected = pane, artColors = artColors, fallbackAccent = fallbackAccent, onSelect = { pane = it })
         }
     }
 }
 
 @Composable
-private fun BottomTabs(selected: Pane, artColors: ArtColors?, onSelect: (Pane) -> Unit) {
+private fun BottomTabs(selected: Pane, artColors: ArtColors?, fallbackAccent: Int, onSelect: (Pane) -> Unit) {
+    // Selected-tab color = album-art accent if present, else the user's chosen fallback accent.
+    val accent = artColors?.let { Color(it.accent) } ?: Color(fallbackAccent)
+    val onAccent = artColors?.let { Color(it.onAccent) } ?: readableOn(Color(fallbackAccent))
     Surface(
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxWidth(),
@@ -77,64 +82,29 @@ private fun BottomTabs(selected: Pane, artColors: ArtColors?, onSelect: (Pane) -
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TabButton(
-                label = "Now Playing",
-                icon = Icons.Filled.Bluetooth,
-                selected = selected == Pane.NowPlaying,
-                artColors = artColors,
-                onClick = { onSelect(Pane.NowPlaying) },
-                modifier = Modifier.weight(1f),
-            )
-            TabButton(
-                label = "Dialer",
-                icon = Icons.Filled.Dialpad,
-                selected = selected == Pane.Phone,
-                artColors = artColors,
-                onClick = { onSelect(Pane.Phone) },
-                modifier = Modifier.weight(1f),
-            )
-            TabButton(
-                label = "Contacts",
-                icon = Icons.Filled.Contacts,
-                selected = selected == Pane.Contacts,
-                artColors = artColors,
-                onClick = { onSelect(Pane.Contacts) },
-                modifier = Modifier.weight(1f),
-            )
-            TabButton(
-                label = "Bluetooth settings",
-                icon = Icons.Filled.Settings,
-                selected = selected == Pane.Bluetooth,
-                artColors = artColors,
-                onClick = { onSelect(Pane.Bluetooth) },
-                modifier = Modifier.weight(1f),
-            )
+            TabButton("Now Playing", Icons.Filled.Bluetooth, selected == Pane.NowPlaying, accent, onAccent, { onSelect(Pane.NowPlaying) }, Modifier.weight(1f))
+            TabButton("Dialer", Icons.Filled.Dialpad, selected == Pane.Phone, accent, onAccent, { onSelect(Pane.Phone) }, Modifier.weight(1f))
+            TabButton("Contacts", Icons.Filled.Contacts, selected == Pane.Contacts, accent, onAccent, { onSelect(Pane.Contacts) }, Modifier.weight(1f))
+            TabButton("Bluetooth settings", Icons.Filled.Settings, selected == Pane.Bluetooth, accent, onAccent, { onSelect(Pane.Bluetooth) }, Modifier.weight(1f))
         }
     }
 }
+
+/** Black or white, whichever reads on [bg]. */
+internal fun readableOn(bg: Color): Color = if (bg.luminance() > 0.5f) Color.Black else Color.White
 
 @Composable
 private fun TabButton(
     label: String,
     icon: ImageVector,
     selected: Boolean,
-    artColors: ArtColors?,
+    accent: Color,
+    onAccent: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Selected tab picks up the album-art accent (with a readable on-color); falls back to theme.
-    val accent = artColors?.let { Color(it.accent) }
-    val onAccent = artColors?.let { Color(it.onAccent) }
-    val container = when {
-        !selected -> MaterialTheme.colorScheme.surface
-        accent != null -> accent
-        else -> MaterialTheme.colorScheme.primaryContainer
-    }
-    val content = when {
-        !selected -> MaterialTheme.colorScheme.onSurfaceVariant
-        onAccent != null -> onAccent
-        else -> MaterialTheme.colorScheme.onPrimaryContainer
-    }
+    val container = if (selected) accent else MaterialTheme.colorScheme.surface
+    val content = if (selected) onAccent else MaterialTheme.colorScheme.onSurfaceVariant
     Surface(
         onClick = onClick,
         color = container,
