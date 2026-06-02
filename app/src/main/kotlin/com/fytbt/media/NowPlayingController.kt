@@ -142,14 +142,17 @@ class NowPlayingController(private val appContext: Context) {
     fun seekTo(positionMs: Long) = transport { it.seekTo(positionMs.coerceAtLeast(0L)) }
 
     /**
-     * Called when our app returns to the foreground. If the phone is already playing, make Bluetooth
-     * the active MCU source so you actually hear it (this is what "takes over from the radio"). If
-     * the phone is paused/stopped, do NOTHING — opening the app must never start playback you paused,
-     * and there's nothing to route anyway.
+     * Called when our app returns to the foreground. Behaves like the stock BT app: opening it
+     * CLAIMS Bluetooth as the active source — killing the radio and pausing on-unit players — so the
+     * phone is what you hear. We only claim when Bluetooth isn't ALREADY the active MCU source
+     * (currentAppId != BTAV): if it already is, leave playback as-is so a deliberate manual pause is
+     * never overridden by simply re-opening the app.
      */
     fun onAppResumed() {
         foreground = true
-        if (controller != null && _playback.value?.isPlaying == true) claimBtAudio()
+        if (controller != null && SourceCoordinatorService.currentAppId != SyuLink.APP_ID_BTAV) {
+            claimBtAudio()
+        }
     }
 
     /**
@@ -290,9 +293,9 @@ class NowPlayingController(private val appContext: Context) {
         controllerCallback = cb
         captureSnapshot(c)
         // The browser connects a few hundred ms after onResume, so onResume's claim ran with no
-        // controller yet. If the app is foreground and the phone is already playing, claim here now
-        // that the session is live. Never claims a paused phone — no auto-play.
-        if (foreground && _playback.value?.isPlaying == true) claimBtAudio()
+        // controller yet. If the app is foreground and Bluetooth isn't already the active source,
+        // claim it now that the session is live (matches onAppResumed — kill the radio / take over).
+        if (foreground && SourceCoordinatorService.currentAppId != SyuLink.APP_ID_BTAV) claimBtAudio()
     }
 
     private fun captureSnapshot(c: MediaController) {

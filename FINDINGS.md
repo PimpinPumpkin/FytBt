@@ -149,29 +149,47 @@ Implemented in
   `com.android.bluetooth` AVRCP-controller session is the phone; any other non-self session is a
   local player (e.g. `com.spotify.music` installed on the unit).
 
-### The one place audio focus matters (resume after a local player)
+### Resuming Bluetooth must re-route through the STOCK path, not a bare play()
 
-The MCU source (APP_ID), not Android audio focus, governs *routing* — but there's a subtle trap.
-A **local player that uses Android audio focus** (e.g. **Symphony**, `io.github.zyrouge.symphony`,
-`USAGE_UNKNOWN`) keeps **holding** focus after we pause it. When the source returns to Bluetooth and
-we resume the phone, the MCU is routing Bluetooth — but the stale focus holder **suppresses the sink
-output**, so the phone "plays" yet is **silent for ~10 s** until something evicts that focus.
+The subtle one. After the coordinator pauses the phone for another source, just calling `play()` on
+the BT session when the source returns leaves it **silent** — the phone shows "playing" (and the MCU
+source is back to APP_ID 3) but **no audio comes out for ~10 s**, until a manual pause/play toggle on
+the stereo kicks it. Two things are going on:
 
-Caught it in `dumpsys audio`'s focus event log during a real test:
+1. **Routing needs the stock BtMusic component to re-grab focus and re-assert the sink.** That's what
+   a manual toggle does, and it's the `widgetPlayPause` lever (§5). A bare AVRCP `play()` from us
+   doesn't trigger it. (First wrong guess: have *our* app grab `AUDIOFOCUS_GAIN` and `play()` — that
+   put focus on `com.fytbt`, not stock BtMusic, and stayed silent. The working state has **`com.syu.bt`
+   holding focus**, not us.)
+2. **A focus-holding local player blocks the sink.** A local app that uses audio focus (e.g.
+   **Symphony**, `io.github.zyrouge.symphony`, `USAGE_UNKNOWN`) keeps **holding** focus after we pause
+   it, suppressing the sink output until evicted. Seen in `dumpsys audio`:
+   ```
+   09:28:31  requestAudioFocus from io.github.zyrouge.symphony   # local music grabs focus
+      … ~13 s of silence …
+   09:28:44  requestAudioFocus from com.fytbt                    # something finally requests focus
+   09:28:44  abandonAudioFocus from io.github.zyrouge.symphony   # Symphony evicted → audio returns
+   ```
 
-```
-09:28:31  requestAudioFocus from io.github.zyrouge.symphony   # local music grabs focus
-   … ~13 s of silence …
-09:28:44  requestAudioFocus from com.fytbt                    # our UI finally requests focus
-09:28:44  abandonAudioFocus from io.github.zyrouge.symphony   # Symphony evicted → audio returns
-```
+**Fix:** on a BT resume, [`SourceCoordinatorService`] does what a manual toggle does — grab focus
+(evicts the stale local holder) **then fire the `widgetPlayPause` lever** ([`SyuBridge`]) and assert
+`play()` a beat later. We never *react* to focus changes — the A2DP sink toggles focus during normal
+playback, so reacting would kill our own audio (§6). Radio/Spotify never showed this (radio bypasses
+focus; Spotify releases it promptly) — only a focus-holding local player like Symphony exposes it.
 
-**Fix:** on a BT resume, [`SourceCoordinatorService`] requests `AUDIOFOCUS_GAIN` *before* `play()`,
-which evicts the stale holder immediately (Symphony abandons the instant we request) so audio comes
-out at once. We **never react** to focus changes — the A2DP *sink* grabs/releases focus as part of
-normal playback, so reacting to a loss would kill our own audio (§6); the listener is a no-op. This
-is also why the radio/Spotify cases never showed the bug: the radio bypasses focus entirely, and
-Spotify releases it promptly — only a focus-holding local player exposes it.
+**Verified objectively** with a mic pointed at the unit's output (`ffmpeg -af volumedetect`,
+max_volume): BT playing ≈ **−18 dB**, BT paused ≈ **−43 dB**. After auto-resume: **−17.9 dB**; after
+claim-on-open: **−21.4 dB** — i.e. real audio, not the silent floor.
+
+### Claiming Bluetooth on app-open (predictable, like the stock app)
+
+Opening the app **claims Bluetooth as the active source** — it fires the same `widgetPlayPause` lever,
+which kills the radio and (via the coordinator pausing non-source sessions) pauses on-unit players
+like Symphony, then plays the phone. It only does this when BT **isn't already** the active source
+(`SourceCoordinatorService.currentAppId != 3`), so simply re-opening the app while already on a
+*paused* BT phone won't force playback. The UI's claim and the coordinator's resulting auto-resume
+both fire the lever, so [`SyuBridge`] **self-debounces** (1.5 s) to guarantee a single toggle —
+verified: the second call logs `switchSourceToBluetooth: debounced (46ms since last)`.
 
 ### The golden rule (learned through painful regressions)
 
