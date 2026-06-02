@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -123,15 +124,20 @@ class SourceCoordinatorService : Service() {
     }
 
     /**
-     * Reconcile playback to the new MCU source. See the class doc for the model. Mostly plain
-     * [android.media.session.MediaController] transport calls — the MCU source selection (APP_ID),
-     * not Android audio focus, governs *routing*. The ONE place focus matters: a local player we
-     * paused (e.g. Symphony) can keep HOLDING Android audio focus, which suppresses the Bluetooth
-     * sink output even though APP_ID is now 3 — so on a BT resume we request GAIN to evict it (see
-     * [acquireFocus]). We never *react* to focus changes (the sink toggles focus during normal
-     * playback; reacting would kill our own audio — FINDINGS.md §6).
+     * Reconcile playback to the new MCU source. See the class doc for the model.
+     *
+     * The pause side is plain [android.media.session.MediaController] transport calls. The RESUME
+     * side is the subtle one: just calling play() on the BT session leaves it **silent** — the phone
+     * shows "playing" but no audio comes out for ~10 s. Routing on this unit requires the STOCK
+     * BtMusic component to grab audio focus and re-assert the sink (exactly what a manual pause/play
+     * toggle on the stereo does), which is the `widgetPlayPause` lever in [SyuBridge]. So on a BT
+     * resume we fire that lever (+ grab focus first to evict any local app like Symphony still
+     * holding it, which would otherwise suppress the sink) and assert play a beat later. We never
+     * *react* to focus changes (the sink toggles focus during normal playback; reacting would kill
+     * our own audio — FINDINGS.md §6).
      */
     private fun coordinate(appId: Int) {
+        currentAppId = appId
         val sessions = runCatching { msm?.getActiveSessions(listenerComponent) }.getOrNull() ?: return
         val self = applicationContext.packageName
         val btIsSource = appId == SyuLink.APP_ID_BTAV
@@ -145,15 +151,17 @@ class SourceCoordinatorService : Service() {
         if (btIsSource) {
             if (bt != null && btPausedByMcu) {
                 btPausedByMcu = false
-                // CRITICAL: grab audio focus BEFORE resuming. A local player we paused (e.g.
-                // Symphony) can keep HOLDING Android audio focus, which suppresses the Bluetooth
-                // sink output even though the MCU source is now Bluetooth — the phone "plays" but
-                // is silent until something evicts that stale focus holder. Requesting GAIN here
-                // evicts it immediately (verified: Symphony abandons focus the instant we request),
-                // so audio comes out at once instead of after a ~10s limbo. See FINDINGS.md §3/§5.
+                // Route audio the way the stock app does. Bare play() here is silent for ~10s; the
+                // stock widgetPlayPause lever (= what a manual toggle does) makes BtMusic grab focus
+                // and re-assert the sink. Grab focus first to evict a focus-holding local player
+                // (e.g. Symphony) that would otherwise keep the sink muted. See FINDINGS.md §3/§5.
                 acquireFocus()
-                runCatching { bt.transportControls.play() }
-                Log.i(TAG, "source -> Bluetooth: resume phone")
+                SyuBridge.switchSourceToBluetooth(applicationContext)
+                scope?.launch {
+                    delay(RESUME_PLAY_DELAY_MS)
+                    runCatching { bt.transportControls.play() }
+                }
+                Log.i(TAG, "source -> Bluetooth: resume phone (claim + route)")
             }
         } else {
             if (bt != null && bt.playbackState?.state == PlaybackState.STATE_PLAYING) {
@@ -206,9 +214,21 @@ class SourceCoordinatorService : Service() {
         private const val CHANNEL_ID = "fytbt_source_coord"
         private const val NOTIF_ID = 7001
         private const val BT_PACKAGE = "com.android.bluetooth"
+        // The SYU source switch toggles play/pause, so we assert play a beat after firing it.
+        private const val RESUME_PLAY_DELAY_MS = 700L
         // MCU APP_IDs that map to an on-unit media player (FinalMain): AUDIO_PLAYER=8, VIDEO=9,
         // THIRD_PLAYER=10 (e.g. Spotify-on-unit).
         private val LOCAL_PLAYER_APP_IDS = setOf(8, 9, 10)
+
+        /**
+         * Latest MCU active-source APP_ID seen by the coordinator (-1 until first read). Lets the UI
+         * decide whether opening the app needs to claim Bluetooth: if BT isn't already the source,
+         * claim it (kill the radio / pause local players); if it already is, leave playback alone so
+         * a manual pause isn't overridden.
+         */
+        @Volatile
+        var currentAppId: Int = -1
+            private set
 
         /** Start (or no-op if already running) the coordinator. Safe to call from the Activity. */
         fun start(context: Context) {
