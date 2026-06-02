@@ -19,11 +19,18 @@ a phone, reading the call log) all worked. So I built this as a normal **sideloa
 that reimplements the Bluetooth UI — plus a media player and a dialer — to route around the stock
 app's bugs. It runs alongside the SYU stock apps; it doesn't (and can't) uninstall them.
 
+**`FINDINGS.md`** is the deep technical writeup — the MCU audio-source model, the reverse-engineered
+SYU vendor IPC, the auto-pause mechanism, the "silent audio" saga, and all the dead-ends and niche
+testing it took to figure this hardware out. Start there if you want the "why."
+
 See `spec.md` (or the original build spec) for the full set of verified device facts
 and constraints. The short version:
 
 - UNISOC UIS7870SC, Android 13 (API 33), AOSP, **non-rooted**, portrait 768×1024.
 - The unit is the **A2DP sink** (`A2dpSinkService`). The phone is the source.
+- An **MCU** under Android owns audio routing: one active source at a time, identified by an
+  integer `APP_ID`. Source switching bypasses Android audio focus, so the only reliable signal is
+  the MCU's `APP_ID`, read live over the SYU vendor IPC. See `FINDINGS.md` §1–3.
 - Discoverable mode is hard-capped at 300 s by the OS. We do not try to exceed this.
 - HFP / SCO / call audio is explicitly **out of scope** (system-only).
 
@@ -37,6 +44,20 @@ and constraints. The short version:
 - Pair from the discovered list.
 - Adapter state + scan-mode banner.
 - Best-effort A2DP-sink connection display via `getProfileProxy` on the hidden profile id `11`.
+
+## Beyond MVP (built since)
+
+- **Now Playing** pane: album art centerpiece, transport controls, track/artist/album, display-only
+  playhead, dynamic accent + blurred-art background.
+- **Audio that actually plays**: switches the MCU source to Bluetooth so phone audio comes out of
+  the speakers (the stock app used to be the only way). See `FINDINGS.md` §5.
+- **Automatic source coordination** (the big one): a foreground service reads the MCU's active
+  source over the SYU IPC and **pauses the phone (and the unit's own music/Spotify) when you switch
+  to the radio or any other source, then resumes when you switch back** — reliably, even with our UI
+  off-screen, and without ever overriding a manual pause. See `FINDINGS.md` §1–4.
+- **Online album-art fallback** (iTunes Search) + offline disk cache, for phones/apps that don't
+  send art over Bluetooth (Spotify, iPhones).
+- **Dialer + Contacts + Recents** from the phone over Bluetooth PBAP.
 
 ## Project layout
 
@@ -95,5 +116,7 @@ No signing setup needed for debug builds.
 - Cannot exceed the 300 s discoverable cap; not solvable from a user app.
 - A2DP-sink **connect** is not implemented — bonding alone usually causes the phone (source)
   to reconnect automatically. We display sink connection state when the proxy is bindable.
-- AVRCP transport controls (play/pause/skip) are deliberately not built — system-gated.
+- AVRCP **seek** is not honored by the source (drag snaps back), so the playhead is display-only.
+- HFP call audio/mic is broken in firmware (a call wedges the unit mic until reboot) and is
+  system-gated regardless — see `FINDINGS.md` §10. Calls connect but you can't be heard.
 - Cannot uninstall / disable the stock SYU apps. This app simply runs alongside them.

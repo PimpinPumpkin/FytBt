@@ -22,6 +22,12 @@
          (Spotify, iPhones). Only used when the phone supplies no AVRCP cover art. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- SourceCoordinatorService runs as a foreground service so the MCU-source auto-pause keeps
+         working while our UI is backgrounded (the whole point: pause the phone when you switch to
+         the radio, even with our app off-screen). MEDIA_PLAYBACK type matches what it does. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
     <uses-feature android:name="android.hardware.bluetooth" android:required="true" />
 
     <application
@@ -56,5 +62,15 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!--
+            Foreground service that keeps the MCU-source ↔ media auto-pause/resume coordination
+            alive independently of the Activity (so switching to the radio still pauses the phone
+            even when our UI is off-screen / torn down). See SourceCoordinatorService.
+        -->
+        <service
+            android:name=".media.SourceCoordinatorService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 </manifest>

@@ -84,20 +84,13 @@ class NowPlayingController(private val appContext: Context) {
     private var lastSourceClaimMs = 0L
     /** True while the activity is in the foreground (between onResume and onStop). */
     private var foreground = false
-    // Auto-pause: monitor every OTHER app's media session. When one starts PLAYING, the user has
-    // switched to a competing source (Spotify-on-unit, Symphony, etc.) so we pause the phone. This
-    // catches anything with a MediaSession; the FM radio has none and bypasses Android audio, so it
-    // can't be caught this way (would need SYU IPC). This only ADDS a pause — never auto-plays.
-    private val monitoredSessions = HashMap<android.media.session.MediaSession.Token, Pair<MediaController, MediaController.Callback>>()
-    // Last seen playback state per competing session, so we only react to a not-playing -> playing
-    // TRANSITION (a fresh start), not to the steady stream of position-update callbacks a playing
-    // app emits (those were re-pausing the phone every second).
-    private val sessionLastState = HashMap<android.media.session.MediaSession.Token, Int>()
+
+    // NOTE: the MCU-source ↔ media auto-pause/resume coordination lives in
+    // [SourceCoordinatorService] (a foreground service), NOT here — it must survive this Activity
+    // being backgrounded/destroyed. This controller is now purely the Now Playing UI source.
 
     private val sessionsListener = MediaSessionManager.OnActiveSessionsChangedListener { sessions ->
-        val list = sessions ?: emptyList()
-        if (controller == null) attachFromActiveSessions(list)   // fallback display source
-        updateCompetingMonitors(list)                            // auto-pause detection
+        if (controller == null) attachFromActiveSessions(sessions ?: emptyList())  // fallback display source
     }
     private var fallbackListening = false
 
@@ -107,7 +100,8 @@ class NowPlayingController(private val appContext: Context) {
      * when the user switches to another source (radio/local). Full teardown happens in [shutdown].
      */
     fun start() {
-        if (scope == null) scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        val freshScope = scope == null
+        if (freshScope) scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         refreshAccess()
         connectBrowser()
         startFallback()
@@ -119,7 +113,6 @@ class NowPlayingController(private val appContext: Context) {
     /** Full teardown — call from the activity's onDestroy. */
     fun shutdown() {
         foreground = false
-        clearCompetingMonitors()
         stopFallback()
         detachController()
         releaseAudioFocus()
@@ -178,71 +171,6 @@ class NowPlayingController(private val appContext: Context) {
         scope?.launch {
             delay(700)
             transport { it.play() }
-        }
-    }
-
-    // --- Auto-pause: competing media-session monitoring -------------------
-
-    private fun updateCompetingMonitors(sessions: List<MediaController>) {
-        val competing = sessions.filter {
-            it.packageName != BT_PACKAGE && it.packageName != appContext.packageName
-        }
-        val keep = competing.map { it.sessionToken }.toSet()
-        // Drop monitors for sessions that went away.
-        monitoredSessions.keys.toList().forEach { token ->
-            if (token !in keep) {
-                monitoredSessions.remove(token)?.let { (c, cb) -> runCatching { c.unregisterCallback(cb) } }
-                sessionLastState.remove(token)
-            }
-        }
-        // Add monitors for newly-seen sessions. Seed last-state with the CURRENT state so an
-        // already-playing app doesn't count as a fresh start on its first position update.
-        competing.forEach { c ->
-            if (!monitoredSessions.containsKey(c.sessionToken)) {
-                val token = c.sessionToken
-                val pkg = c.packageName
-                sessionLastState[token] = c.playbackState?.state ?: PlaybackState.STATE_NONE
-                val cb = object : MediaController.Callback() {
-                    override fun onPlaybackStateChanged(state: PlaybackState?) {
-                        val now = state?.state ?: PlaybackState.STATE_NONE
-                        val prev = sessionLastState[token] ?: PlaybackState.STATE_NONE
-                        sessionLastState[token] = now
-                        // Only a fresh not-playing -> playing transition counts as "took over".
-                        if (now == PlaybackState.STATE_PLAYING && prev != PlaybackState.STATE_PLAYING) {
-                            onCompetingSourcePlaying(pkg)
-                        }
-                    }
-                    override fun onSessionDestroyed() {
-                        monitoredSessions.remove(token)?.let { (cc, ccb) ->
-                            runCatching { cc.unregisterCallback(ccb) }
-                        }
-                        sessionLastState.remove(token)
-                    }
-                }
-                c.registerCallback(cb, mainHandler)
-                monitoredSessions[token] = c to cb
-            }
-        }
-    }
-
-    private fun clearCompetingMonitors() {
-        monitoredSessions.values.forEach { (c, cb) -> runCatching { c.unregisterCallback(cb) } }
-        monitoredSessions.clear()
-        sessionLastState.clear()
-    }
-
-    private fun onCompetingSourcePlaying(pkg: String?) {
-        // Only auto-pause when our app is in the BACKGROUND. If the user is looking at the BT app
-        // they want Bluetooth audio — a competing source shouldn't pause it (and opening our app
-        // while e.g. NavRadio is playing must claim BT, not get paused by it). When backgrounded,
-        // the user has navigated to the other source, so pausing the phone is what they want.
-        if (foreground) return
-        // Belt-and-suspenders against a claim that fired on the way out.
-        if (SystemClock.elapsedRealtime() - lastSourceClaimMs < COMPETING_IGNORE_AFTER_CLAIM_MS) return
-        if (_playback.value?.isPlaying == true) {
-            Log.i(TAG, "competing source playing ($pkg) -> pausing phone")
-            transport { it.pause() }
-            releaseAudioFocus()
         }
     }
 
@@ -317,7 +245,6 @@ class NowPlayingController(private val appContext: Context) {
         try {
             val current = msm?.getActiveSessions(listenerComponent) ?: emptyList()
             if (controller == null) attachFromActiveSessions(current)
-            updateCompetingMonitors(current)
             msm?.addOnActiveSessionsChangedListener(sessionsListener, listenerComponent)
             fallbackListening = true
         } catch (e: SecurityException) {
@@ -584,8 +511,5 @@ class NowPlayingController(private val appContext: Context) {
         const val BT_BROWSER_SERVICE = "com.android.bluetooth.avrcpcontroller.BluetoothMediaBrowserService"
         // The SYU source switch is a play/pause toggle; firing it twice quickly cancels out.
         private const val CLAIM_DEBOUNCE_MS = 1500L
-        // After we claim BT, ignore competing-source PLAYING blips for this long (the displaced
-        // local app may emit a transient PLAYING before it yields focus).
-        private const val COMPETING_IGNORE_AFTER_CLAIM_MS = 2500L
     }
 }
