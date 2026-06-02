@@ -149,6 +149,30 @@ Implemented in
   `com.android.bluetooth` AVRCP-controller session is the phone; any other non-self session is a
   local player (e.g. `com.spotify.music` installed on the unit).
 
+### The one place audio focus matters (resume after a local player)
+
+The MCU source (APP_ID), not Android audio focus, governs *routing* — but there's a subtle trap.
+A **local player that uses Android audio focus** (e.g. **Symphony**, `io.github.zyrouge.symphony`,
+`USAGE_UNKNOWN`) keeps **holding** focus after we pause it. When the source returns to Bluetooth and
+we resume the phone, the MCU is routing Bluetooth — but the stale focus holder **suppresses the sink
+output**, so the phone "plays" yet is **silent for ~10 s** until something evicts that focus.
+
+Caught it in `dumpsys audio`'s focus event log during a real test:
+
+```
+09:28:31  requestAudioFocus from io.github.zyrouge.symphony   # local music grabs focus
+   … ~13 s of silence …
+09:28:44  requestAudioFocus from com.fytbt                    # our UI finally requests focus
+09:28:44  abandonAudioFocus from io.github.zyrouge.symphony   # Symphony evicted → audio returns
+```
+
+**Fix:** on a BT resume, [`SourceCoordinatorService`] requests `AUDIOFOCUS_GAIN` *before* `play()`,
+which evicts the stale holder immediately (Symphony abandons the instant we request) so audio comes
+out at once. We **never react** to focus changes — the A2DP *sink* grabs/releases focus as part of
+normal playback, so reacting to a loss would kill our own audio (§6); the listener is a no-op. This
+is also why the radio/Spotify cases never showed the bug: the radio bypasses focus entirely, and
+Spotify releases it promptly — only a focus-holding local player exposes it.
+
 ### The golden rule (learned through painful regressions)
 
 **We only ever resume a source we ourselves auto-paused.** If a session wasn't playing when the
