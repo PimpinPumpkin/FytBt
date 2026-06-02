@@ -149,19 +149,30 @@ class SourceCoordinatorService : Service() {
 
         // --- The phone over Bluetooth -------------------------------------------------
         if (btIsSource) {
+            // Consume the suppress flag on any return to BT (set by an app-open take-over that
+            // doesn't want auto-play). Consumed even when there's nothing to resume, so it never
+            // goes stale and blocks a later legitimate auto-resume.
+            val suppressed = suppressAutoResume
+            suppressAutoResume = false
             if (bt != null && btPausedByMcu) {
                 btPausedByMcu = false
-                // Route audio the way the stock app does. Bare play() here is silent for ~10s; the
-                // stock widgetPlayPause lever (= what a manual toggle does) makes BtMusic grab focus
-                // and re-assert the sink. Grab focus first to evict a focus-holding local player
-                // (e.g. Symphony) that would otherwise keep the sink muted. See FINDINGS.md §3/§5.
-                acquireFocus()
-                SyuBridge.switchSourceToBluetooth(applicationContext)
-                scope?.launch {
-                    delay(RESUME_PLAY_DELAY_MS)
-                    runCatching { bt.transportControls.play() }
+                if (suppressed) {
+                    // App-open take-over: the UI already switched the source and is asserting pause.
+                    // Don't auto-play — opening the app must not start a phone you didn't start.
+                    Log.i(TAG, "source -> Bluetooth: auto-resume suppressed (app-open take-over)")
+                } else {
+                    // Route audio the way the stock app does. Bare play() here is silent for ~10s; the
+                    // stock widgetPlayPause lever (= what a manual toggle does) makes BtMusic grab focus
+                    // and re-assert the sink. Grab focus first to evict a focus-holding local player
+                    // (e.g. Symphony) that would otherwise keep the sink muted. See FINDINGS.md §3/§5.
+                    acquireFocus()
+                    SyuBridge.switchSourceToBluetooth(applicationContext)
+                    scope?.launch {
+                        delay(RESUME_PLAY_DELAY_MS)
+                        runCatching { bt.transportControls.play() }
+                    }
+                    Log.i(TAG, "source -> Bluetooth: resume phone (claim + route)")
                 }
-                Log.i(TAG, "source -> Bluetooth: resume phone (claim + route)")
             }
         } else {
             if (bt != null && bt.playbackState?.state == PlaybackState.STATE_PLAYING) {
@@ -229,6 +240,14 @@ class SourceCoordinatorService : Service() {
         @Volatile
         var currentAppId: Int = -1
             private set
+
+        /**
+         * Set by the UI just before an app-open take-over (claim BT without playing). The coordinator
+         * consumes it on the next return to BT and skips its auto-resume, so opening the app kills
+         * other sources without force-starting the phone. One-shot.
+         */
+        @Volatile
+        var suppressAutoResume: Boolean = false
 
         /** Start (or no-op if already running) the coordinator. Safe to call from the Activity. */
         fun start(context: Context) {

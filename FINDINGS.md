@@ -181,15 +181,21 @@ focus; Spotify releases it promptly) — only a focus-holding local player like 
 max_volume): BT playing ≈ **−18 dB**, BT paused ≈ **−43 dB**. After auto-resume: **−17.9 dB**; after
 claim-on-open: **−21.4 dB** — i.e. real audio, not the silent floor.
 
-### Claiming Bluetooth on app-open (predictable, like the stock app)
+### Claiming Bluetooth on app-open (take over, but DON'T start playing)
 
-Opening the app **claims Bluetooth as the active source** — it fires the same `widgetPlayPause` lever,
-which kills the radio and (via the coordinator pausing non-source sessions) pauses on-unit players
-like Symphony, then plays the phone. It only does this when BT **isn't already** the active source
-(`SourceCoordinatorService.currentAppId != 3`), so simply re-opening the app while already on a
-*paused* BT phone won't force playback. The UI's claim and the coordinator's resulting auto-resume
-both fire the lever, so [`SyuBridge`] **self-debounces** (1.5 s) to guarantee a single toggle —
-verified: the second call logs `switchSourceToBluetooth: debounced (46ms since last)`.
+Opening the app **claims Bluetooth as the active source but does NOT start playback** — it fires the
+`widgetPlayPause` lever (kills the radio), the coordinator pauses on-unit players (Symphony), and the
+phone is left **paused** (you press play yourself). It only claims when BT **isn't already** the
+active source (`SourceCoordinatorService.currentAppId != 3`). Verified by mic: open-from-AUX measures
+**−39.9 dB** (silent), then pressing play measures **−17.7 dB** (audio).
+
+Mechanics: the app-open path calls `claimBtAudio(play = false)`, which sets
+`SourceCoordinatorService.suppressAutoResume` and asserts AVRCP **pause** after the lever's toggle
+settles (the lever is a play/pause toggle, so a paused phone could otherwise flip to playing). The
+coordinator consumes the suppress flag on the resulting `APP_ID → 3` and **skips its auto-resume**, so
+the two paths don't fight to play. [`SyuBridge`] also self-debounces (1.5 s) so the UI claim and any
+coordinator follow-up fire a single toggle (`switchSourceToBluetooth: debounced (46ms since last)`).
+The explicit play button uses `claimBtAudio(play = true)` — switch source **and** play (routes audio).
 
 ### The golden rule (learned through painful regressions)
 

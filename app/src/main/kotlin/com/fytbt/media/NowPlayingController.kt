@@ -129,13 +129,13 @@ class NowPlayingController(private val appContext: Context) {
     // playing (to route that audio onto Bluetooth). A manual pause therefore always sticks — we
     // don't fight it. Now-playing state comes straight from the MediaController callback.
 
-    fun play() = claimBtAudio()
+    fun play() = claimBtAudio(play = true)
     fun pause() {
         transport { it.pause() }
         releaseAudioFocus()
     }
     fun playPauseToggle() {
-        if (_playback.value?.isPlaying == true) pause() else claimBtAudio()
+        if (_playback.value?.isPlaying == true) pause() else claimBtAudio(play = true)
     }
     fun skipNext() = transport { it.skipToNext() }
     fun skipPrev() = transport { it.skipToPrevious() }
@@ -143,37 +143,43 @@ class NowPlayingController(private val appContext: Context) {
 
     /**
      * Called when our app returns to the foreground. Behaves like the stock BT app: opening it
-     * CLAIMS Bluetooth as the active source — killing the radio and pausing on-unit players — so the
-     * phone is what you hear. We only claim when Bluetooth isn't ALREADY the active MCU source
-     * (currentAppId != BTAV): if it already is, leave playback as-is so a deliberate manual pause is
-     * never overridden by simply re-opening the app.
+     * CLAIMS Bluetooth as the active source — killing the radio and pausing on-unit players — but
+     * does NOT start playback (play = false): if you just open the app, it silences other sources and
+     * leaves the phone where it was; you press play yourself. We only claim when Bluetooth isn't
+     * ALREADY the active MCU source (currentAppId != BTAV).
      */
     fun onAppResumed() {
         foreground = true
         if (controller != null && SourceCoordinatorService.currentAppId != SyuLink.APP_ID_BTAV) {
-            claimBtAudio()
+            claimBtAudio(play = false)
         }
     }
 
     /**
-     * Make Bluetooth the MCU audio source and ensure the phone is playing. The SYU lever
-     * (widgetPlayPause) switches the source but also toggles play, so we assert AVRCP play a beat
-     * later to land on "playing". Only ever called from explicit play or open-while-playing, so it
-     * can't fight a manual pause. Debounced against rapid double-calls (resume + attach).
+     * Make Bluetooth the active MCU audio source via the SYU lever (widgetPlayPause), which kills the
+     * radio and lets the coordinator pause on-unit players.
+     *
+     * @param play  true  → land on PLAYING (explicit play button / toggle): assert AVRCP play after
+     *                       the lever's toggle settles.
+     *              false → just TAKE OVER without starting playback (app-open): tell the coordinator
+     *                       not to auto-resume, and assert PAUSE after the toggle so opening the app
+     *                       never force-starts a paused phone. Either way a manual pause is respected.
+     * Debounced against rapid double-calls (onResume + attachController).
      */
-    private fun claimBtAudio() {
+    private fun claimBtAudio(play: Boolean) {
         if (controller == null) return
+        if (!play) SourceCoordinatorService.suppressAutoResume = true
         val now = SystemClock.elapsedRealtime()
         if (now - lastSourceClaimMs < CLAIM_DEBOUNCE_MS) {
-            transport { it.play() }
+            transport { if (play) it.play() else it.pause() }
             return
         }
         lastSourceClaimMs = now
-        acquireAudioFocus()
+        if (play) acquireAudioFocus()
         SyuBridge.switchSourceToBluetooth(appContext)
         scope?.launch {
             delay(700)
-            transport { it.play() }
+            transport { if (play) it.play() else it.pause() }
         }
     }
 
@@ -294,8 +300,8 @@ class NowPlayingController(private val appContext: Context) {
         captureSnapshot(c)
         // The browser connects a few hundred ms after onResume, so onResume's claim ran with no
         // controller yet. If the app is foreground and Bluetooth isn't already the active source,
-        // claim it now that the session is live (matches onAppResumed — kill the radio / take over).
-        if (foreground && SourceCoordinatorService.currentAppId != SyuLink.APP_ID_BTAV) claimBtAudio()
+        // claim it now that the session is live (matches onAppResumed — take over without playing).
+        if (foreground && SourceCoordinatorService.currentAppId != SyuLink.APP_ID_BTAV) claimBtAudio(play = false)
     }
 
     private fun captureSnapshot(c: MediaController) {
