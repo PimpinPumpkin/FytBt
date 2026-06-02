@@ -29,6 +29,14 @@ class MainActivity : ComponentActivity() {
     private lateinit var nowPlaying: NowPlayingController
     private val permsGranted = MutableStateFlow(false)
 
+    // User-selectable accent used when there's no album art to derive colors from. Persisted.
+    private val prefs by lazy { getSharedPreferences("fytbt", MODE_PRIVATE) }
+    private val fallbackAccent = MutableStateFlow(DEFAULT_ACCENT)
+    private fun setFallbackAccent(argb: Int) {
+        fallbackAccent.value = argb
+        prefs.edit().putInt("fallback_accent", argb).apply()
+    }
+
     private val requestPerms = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
@@ -104,6 +112,7 @@ class MainActivity : ComponentActivity() {
         nowPlaying = NowPlayingController(applicationContext)
         permsGranted.value = permissionsGranted()
         refreshPhonePerms()
+        fallbackAccent.value = prefs.getInt("fallback_accent", DEFAULT_ACCENT)
 
         setContent {
             FytBtTheme {
@@ -123,6 +132,7 @@ class MainActivity : ComponentActivity() {
 
                 val contactsOk by contactsGranted.collectAsState()
                 val callLogOk by callLogGranted.collectAsState()
+                val accentArgb by fallbackAccent.collectAsState()
 
                 LaunchedEffect(Unit) {
                     if (!granted) requestPerms.launch(REQUIRED_PERMISSIONS)
@@ -130,6 +140,7 @@ class MainActivity : ComponentActivity() {
 
                 RootScreen(
                     artColors = artColors,
+                    fallbackAccent = accentArgb,
                     nowPlayingContent = {
                         NowPlayingScreen(
                             hasNotificationAccess = hasNotificationAccess,
@@ -137,6 +148,7 @@ class MainActivity : ComponentActivity() {
                             metadata = metadata,
                             playback = playback,
                             artColors = artColors,
+                            fallbackAccent = accentArgb,
                             onGrantNotificationAccess = { nowPlaying.openNotificationAccessSettings() },
                             onRefreshAccess = {
                                 nowPlaying.refreshAccess()
@@ -181,6 +193,8 @@ class MainActivity : ComponentActivity() {
                             onRefreshPaired = { controller.refreshPaired() },
                             onUnpair = { controller.unpair(it) },
                             onConnect = { controller.connectA2dpSink(it) },
+                            fallbackAccent = accentArgb,
+                            onPickAccent = { setFallbackAccent(it) },
                         )
                     },
                 )
@@ -227,6 +241,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val STOCK_BT_PACKAGE = "com.syu.bt"
+        private const val DEFAULT_ACCENT = 0xFF7AB7FF.toInt()  // the theme's blue primary
         private val REQUIRED_PERMISSIONS = arrayOf(
             Manifest.permission.BLUETOOTH_CONNECT,
             Manifest.permission.BLUETOOTH_SCAN,

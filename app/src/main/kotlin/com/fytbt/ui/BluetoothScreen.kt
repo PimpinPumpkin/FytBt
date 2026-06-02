@@ -2,7 +2,9 @@ package com.fytbt.ui
 
 import android.bluetooth.BluetoothAdapter
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,12 +17,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -41,6 +49,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -66,6 +75,8 @@ fun BluetoothScreen(
     onRefreshPaired: () -> Unit,
     onUnpair: (BtDevice) -> Unit,
     onConnect: (BtDevice) -> Unit,
+    fallbackAccent: Int,
+    onPickAccent: (Int) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         HeaderCard(
@@ -98,8 +109,59 @@ fun BluetoothScreen(
             onConnect = onConnect,
             modifier = Modifier.weight(1f, fill = true).fillMaxWidth(),
         )
+        Spacer(Modifier.height(14.dp))
+        AccentPicker(selected = fallbackAccent, onPick = onPickAccent)
     }
 }
+
+/** Lets the user choose the player accent used when there's no album art to pull colors from. */
+@Composable
+private fun AccentPicker(selected: Int, onPick: (Int) -> Unit) {
+    SectionLabel("Player accent (no artwork)")
+    Spacer(Modifier.height(8.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ACCENT_PRESETS.forEach { argb ->
+            val color = Color(argb)
+            val isSelected = argb == selected
+            Box(
+                modifier = Modifier
+                    .padding(end = 12.dp)
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(color)
+                    .then(
+                        if (isSelected) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                        else Modifier
+                    )
+                    .clickable { onPick(argb) },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (isSelected) {
+                    Icon(
+                        Icons.Filled.Check,
+                        contentDescription = "Selected",
+                        tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private val ACCENT_PRESETS = listOf(
+    0xFF7AB7FF.toInt(), // blue (default)
+    0xFF4DD0E1.toInt(), // cyan
+    0xFF66BB6A.toInt(), // green
+    0xFFB388FF.toInt(), // purple
+    0xFFF06292.toInt(), // pink
+    0xFFFF8A65.toInt(), // coral
+    0xFFFFB74D.toInt(), // orange
+    0xFFFFD54F.toInt(), // amber
+)
 
 @Composable
 private fun HeaderCard(

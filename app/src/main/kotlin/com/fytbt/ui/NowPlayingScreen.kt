@@ -70,6 +70,7 @@ fun NowPlayingScreen(
     metadata: TrackMetadata?,
     playback: PlaybackInfo?,
     artColors: ArtColors?,
+    fallbackAccent: Int,
     onGrantNotificationAccess: () -> Unit,
     onRefreshAccess: () -> Unit,
     onPlayPause: () -> Unit,
@@ -89,13 +90,14 @@ fun NowPlayingScreen(
         return
     }
 
-    // Accent for the controls/slider pulled from the album art (cross-fades on track change).
+    // Accent for the controls/slider: album art if present, else the user's chosen fallback accent.
+    val fallback = Color(fallbackAccent)
     val accent by animateColorAsState(
-        targetValue = artColors?.let { Color(it.accent) } ?: MaterialTheme.colorScheme.primary,
+        targetValue = artColors?.let { Color(it.accent) } ?: fallback,
         animationSpec = tween(600), label = "accent",
     )
     val onAccent by animateColorAsState(
-        targetValue = artColors?.let { Color(it.onAccent) } ?: MaterialTheme.colorScheme.onPrimary,
+        targetValue = artColors?.let { Color(it.onAccent) } ?: readableOn(fallback),
         animationSpec = tween(600), label = "onAccent",
     )
 
