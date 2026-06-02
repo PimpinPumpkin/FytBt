@@ -7,6 +7,18 @@ apps rather than replacing them.
 > **Designed and tested on a 1024×768 vertical "Tesla-style" head-unit screen** (portrait,
 > 768 px wide × 1024 px tall). The whole UI assumes that tall, narrow, finger-operated layout.
 
+## Why this exists
+
+I bought this head unit from the **WDFL Car** store on AliExpress, and its **stock Bluetooth app
+is broken**: you can't set the device's broadcast name, you can't pair a new phone, and it shows
+"nothing connected" even while audio is actually playing. For daily use it's basically unusable.
+
+The catch is that the underlying Android Bluetooth stack is *fine* — only the vendor's UI app is
+broken. Poking at it over `adb` (setting the adapter name, triggering discoverable mode, pairing
+a phone, reading the call log) all worked. So I built this as a normal **sideloaded, no-root** app
+that reimplements the Bluetooth UI — plus a media player and a dialer — to route around the stock
+app's bugs. It runs alongside the SYU stock apps; it doesn't (and can't) uninstall them.
+
 See `spec.md` (or the original build spec) for the full set of verified device facts
 and constraints. The short version:
 
