@@ -36,6 +36,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -77,6 +78,8 @@ fun BluetoothScreen(
     onConnect: (BtDevice) -> Unit,
     fallbackAccent: Int,
     onPickAccent: (Int) -> Unit,
+    takeOverOnOpen: Boolean,
+    onToggleTakeOverOnOpen: (Boolean) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         HeaderCard(
@@ -110,7 +113,42 @@ fun BluetoothScreen(
             modifier = Modifier.weight(1f, fill = true).fillMaxWidth(),
         )
         Spacer(Modifier.height(14.dp))
+        TakeOverToggle(enabled = takeOverOnOpen, onToggle = onToggleTakeOverOnOpen)
+        Spacer(Modifier.height(14.dp))
         AccentPicker(selected = fallbackAccent, onPick = onPickAccent)
+    }
+}
+
+/**
+ * Setting: when ON (default), opening the app claims Bluetooth as the active source — it stops the
+ * radio and pauses on-unit players (like the stock BT app). It does not start playback; you press
+ * play yourself. When OFF, opening the app leaves whatever's playing alone.
+ */
+@Composable
+private fun TakeOverToggle(enabled: Boolean, onToggle: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggle(!enabled) }
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                "Take over audio when opened",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "Stops the radio / other apps when you open this app. Doesn't auto-play.",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(checked = enabled, onCheckedChange = onToggle)
     }
 }
 

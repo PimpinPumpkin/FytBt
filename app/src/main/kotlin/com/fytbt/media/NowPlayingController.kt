@@ -150,10 +150,16 @@ class NowPlayingController(private val appContext: Context) {
      */
     fun onAppResumed() {
         foreground = true
-        if (controller != null && SourceCoordinatorService.currentAppId != SyuLink.APP_ID_BTAV) {
+        if (controller != null && claimOnOpenEnabled() &&
+            SourceCoordinatorService.currentAppId != SyuLink.APP_ID_BTAV
+        ) {
             claimBtAudio(play = false)
         }
     }
+
+    /** User setting (Settings tab): does opening the app take over audio from other sources? Default on. */
+    private fun claimOnOpenEnabled(): Boolean =
+        appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_CLAIM_ON_OPEN, true)
 
     /**
      * Make Bluetooth the active MCU audio source via the SYU lever (widgetPlayPause), which kills the
@@ -301,7 +307,9 @@ class NowPlayingController(private val appContext: Context) {
         // The browser connects a few hundred ms after onResume, so onResume's claim ran with no
         // controller yet. If the app is foreground and Bluetooth isn't already the active source,
         // claim it now that the session is live (matches onAppResumed — take over without playing).
-        if (foreground && SourceCoordinatorService.currentAppId != SyuLink.APP_ID_BTAV) claimBtAudio(play = false)
+        if (foreground && claimOnOpenEnabled() &&
+            SourceCoordinatorService.currentAppId != SyuLink.APP_ID_BTAV
+        ) claimBtAudio(play = false)
     }
 
     private fun captureSnapshot(c: MediaController) {
@@ -520,5 +528,8 @@ class NowPlayingController(private val appContext: Context) {
         const val BT_BROWSER_SERVICE = "com.android.bluetooth.avrcpcontroller.BluetoothMediaBrowserService"
         // The SYU source switch is a play/pause toggle; firing it twice quickly cancels out.
         private const val CLAIM_DEBOUNCE_MS = 1500L
+        // Shared with MainActivity — "take over audio on open" setting (default on).
+        const val PREFS = "fytbt"
+        const val KEY_CLAIM_ON_OPEN = "claim_on_open"
     }
 }

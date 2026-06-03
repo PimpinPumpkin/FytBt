@@ -38,6 +38,14 @@ class MainActivity : ComponentActivity() {
         prefs.edit().putInt("fallback_accent", argb).apply()
     }
 
+    // "Take over audio when opened" — opening the app claims Bluetooth (kills radio / pauses other
+    // players). On by default; the controller reads this pref directly. Persisted.
+    private val claimOnOpen = MutableStateFlow(true)
+    private fun setClaimOnOpen(enabled: Boolean) {
+        claimOnOpen.value = enabled
+        prefs.edit().putBoolean(NowPlayingController.KEY_CLAIM_ON_OPEN, enabled).apply()
+    }
+
     private val requestPerms = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
@@ -116,6 +124,7 @@ class MainActivity : ComponentActivity() {
         permsGranted.value = permissionsGranted()
         refreshPhonePerms()
         fallbackAccent.value = prefs.getInt("fallback_accent", DEFAULT_ACCENT)
+        claimOnOpen.value = prefs.getBoolean(NowPlayingController.KEY_CLAIM_ON_OPEN, true)
 
         setContent {
             FytBtTheme {
@@ -136,6 +145,7 @@ class MainActivity : ComponentActivity() {
                 val contactsOk by contactsGranted.collectAsState()
                 val callLogOk by callLogGranted.collectAsState()
                 val accentArgb by fallbackAccent.collectAsState()
+                val takeOverOnOpen by claimOnOpen.collectAsState()
 
                 LaunchedEffect(Unit) {
                     if (!granted) requestPerms.launch(REQUIRED_PERMISSIONS)
@@ -198,6 +208,8 @@ class MainActivity : ComponentActivity() {
                             onConnect = { controller.connectA2dpSink(it) },
                             fallbackAccent = accentArgb,
                             onPickAccent = { setFallbackAccent(it) },
+                            takeOverOnOpen = takeOverOnOpen,
+                            onToggleTakeOverOnOpen = { setClaimOnOpen(it) },
                         )
                     },
                 )
