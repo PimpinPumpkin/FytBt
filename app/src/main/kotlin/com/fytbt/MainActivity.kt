@@ -10,9 +10,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.ContextCompat
 import com.fytbt.bt.BluetoothController
 import com.fytbt.media.NowPlayingController
@@ -176,20 +178,28 @@ class MainActivity : ComponentActivity() {
                     if (!granted && REQUIRED_PERMISSIONS.isNotEmpty()) requestPerms.launch(REQUIRED_PERMISSIONS)
                 }
 
+                // Effective accent = whatever the active ColorScheme resolved to: Material You when
+                // dynamic color is on, else the album-art accent / chosen fallback. The tab bar and
+                // Now Playing must use THIS (not the raw fallback) so they follow Material You too.
+                val effectiveAccent = MaterialTheme.colorScheme.primary.toArgb()
+                // With Material You on, the accent comes from the system, not the art palette — so
+                // suppress artColors for the *accent* (the blurred-art background still uses metadata).
+                val accentArt = if (dynamic) null else artColors
+
                 RootScreen(
-                    artColors = artColors,
-                    fallbackAccent = accentArgb,
+                    artColors = accentArt,
+                    fallbackAccent = effectiveAccent,
                     nowPlayingContent = {
                         // The media screen is always dark (art under a scrim / accent-on-black), so
                         // it keeps light text regardless of the app's light/dark setting.
-                        NowPlayingDarkTheme(accent = liveAccent) {
+                        NowPlayingDarkTheme(accent = effectiveAccent) {
                             NowPlayingScreen(
                                 hasNotificationAccess = hasNotificationAccess,
                                 hasSession = hasSession,
                                 metadata = metadata,
                                 playback = playback,
-                                artColors = artColors,
-                                fallbackAccent = accentArgb,
+                                artColors = accentArt,
+                                fallbackAccent = effectiveAccent,
                                 onGrantNotificationAccess = { nowPlaying.openNotificationAccessSettings() },
                                 onRefreshAccess = {
                                     nowPlaying.refreshAccess()
