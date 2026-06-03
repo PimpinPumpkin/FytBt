@@ -9,18 +9,23 @@ apps rather than replacing them.
 
 ## Screenshots
 
-<p align="center"><img src="screenshots/now_playing.png" width="320" alt="Now Playing"></p>
+<p align="center"><img src="screenshots/now_playing.png" width="300" alt="Now Playing"></p>
 
 <p align="center">
-  <img src="screenshots/bluetooth.png" width="250" alt="Bluetooth / pairing">
+  <img src="screenshots/bluetooth.png" width="240" alt="Settings / pairing — dark">
   &nbsp;
-  <img src="screenshots/dialer.png" width="250" alt="Dialer">
-  &nbsp;
-  <img src="screenshots/contacts.png" width="250" alt="Contacts">
+  <img src="screenshots/settings_light.png" width="240" alt="Settings / pairing — light">
 </p>
 
-<sub>Now Playing (no-art accent fallback shown), the Bluetooth/pairing pane, the dialer, and contacts.
-Device names and addresses are placeholders.</sub>
+<p align="center">
+  <img src="screenshots/dialer.png" width="240" alt="Dialer">
+  &nbsp;
+  <img src="screenshots/contacts.png" width="240" alt="Contacts">
+</p>
+
+<sub>Now Playing (no-art accent fallback shown), the settings/pairing pane in dark and light themes —
+the chosen accent drives every control, and the theme is Light / Dark / System — then the dialer and
+contacts. Device names and addresses are placeholders.</sub>
 
 ## Why this exists
 
