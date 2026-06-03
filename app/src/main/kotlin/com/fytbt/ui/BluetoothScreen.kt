@@ -49,6 +49,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import com.fytbt.ui.theme.ThemeMode
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,6 +80,8 @@ fun BluetoothScreen(
     onPickAccent: (Int) -> Unit,
     takeOverOnOpen: Boolean,
     onToggleTakeOverOnOpen: (Boolean) -> Unit,
+    themeMode: ThemeMode,
+    onSetThemeMode: (ThemeMode) -> Unit,
 ) {
     // The whole page scrolls as one — the paired list renders all devices inline (rather than
     // being squeezed into a fixed weighted box), so it extends as far as it needs and the settings
@@ -122,8 +125,45 @@ fun BluetoothScreen(
         Spacer(Modifier.height(26.dp))
         TakeOverToggle(enabled = takeOverOnOpen, onToggle = onToggleTakeOverOnOpen)
         Spacer(Modifier.height(22.dp))
+        ThemePicker(selected = themeMode, onSelect = onSetThemeMode)
+        Spacer(Modifier.height(22.dp))
         AccentPicker(selected = fallbackAccent, onPick = onPickAccent)
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+/** Light / dark / follow-system segmented control. The selected segment uses the accent. */
+@Composable
+private fun ThemePicker(selected: ThemeMode, onSelect: (ThemeMode) -> Unit) {
+    SectionLabel("Theme")
+    Spacer(Modifier.height(8.dp))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface),
+    ) {
+        listOf(ThemeMode.LIGHT to "Light", ThemeMode.DARK to "Dark", ThemeMode.SYSTEM to "System")
+            .forEach { (mode, label) ->
+                val sel = mode == selected
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 52.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (sel) MaterialTheme.colorScheme.primary else Color.Transparent)
+                        .clickable { onSelect(mode) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        label,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (sel) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
     }
 }
 
