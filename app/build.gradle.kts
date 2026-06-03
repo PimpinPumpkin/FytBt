@@ -17,8 +17,10 @@ android {
         // legacy BLUETOOTH/BLUETOOTH_ADMIN + location model on 29–30 (see MainActivity/BluetoothController).
         minSdk = 29
         targetSdk = 33
-        versionCode = 1
-        versionName = "0.1.0"
+        // Overridable from CI: -PversionCode=N -PversionName=X, derived from the git tag (see
+        // .github/workflows/release.yml). Defaults are for local debug builds.
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
+        versionName = (project.findProperty("versionName") as String?) ?: "0.1.0"
     }
 
     // Real release signing, populated from env vars set by CI (.github/workflows/release.yml):

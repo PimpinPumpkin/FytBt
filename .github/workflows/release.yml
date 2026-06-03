@@ -27,6 +27,17 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Resolve version from tag
+        id: ver
+        run: |
+          TAG="${{ github.ref_name }}"
+          VNAME="${TAG#v}"
+          IFS='.' read -r MAJ MIN PAT <<< "$VNAME"
+          VCODE=$(( ${MAJ:-0} * 10000 + ${MIN:-0} * 100 + ${PAT:-0} ))
+          echo "name=$VNAME" >> "$GITHUB_OUTPUT"
+          echo "code=$VCODE" >> "$GITHUB_OUTPUT"
+          echo "Building $TAG -> versionName=$VNAME versionCode=$VCODE"
+
       - name: Decode release keystore
         # If the secret isn't configured (e.g. a fork), we silently skip and
         # app/build.gradle.kts falls back to the debug keystore.
@@ -46,7 +57,10 @@ jobs:
           FYTBT_KEYSTORE_PATH: ${{ runner.temp }}/fytbt-release.jks
           FYTBT_KEYSTORE_PASSWORD: ${{ secrets.FYTBT_KEYSTORE_PASSWORD }}
           FYTBT_KEY_ALIAS: ${{ secrets.FYTBT_KEY_ALIAS }}
-        run: ./gradlew assembleRelease --no-daemon
+        run: |
+          ./gradlew assembleRelease --no-daemon \
+            -PversionName=${{ steps.ver.outputs.name }} \
+            -PversionCode=${{ steps.ver.outputs.code }}
 
       - name: Stage APK with version-tagged name
         run: cp app/build/outputs/apk/release/app-release.apk "FytBt-${{ github.ref_name }}.apk"
