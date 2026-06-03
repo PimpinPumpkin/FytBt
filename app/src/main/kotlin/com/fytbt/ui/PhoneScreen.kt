@@ -42,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,6 +53,9 @@ import com.fytbt.phone.CallLogEntry
 import com.fytbt.phone.PhoneData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+/** Vivid green for the call button (the theme's muddy secondary read as dull). */
+private val CallGreen = Color(0xFF30D158)
 
 @Composable
 fun PhoneScreen(
@@ -75,28 +79,59 @@ fun PhoneScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(8.dp))
-        Box(modifier = Modifier.weight(1f, fill = true).fillMaxWidth()) {
-            when {
-                !callLogGranted -> PermissionGate(
-                    text = "Allow call history to see recent calls.",
-                    onGrant = onRequestCallLog,
-                )
-                recents.isEmpty() -> InfoCard(
-                    "No recent calls. They sync from your phone over Bluetooth — make sure " +
-                        "“share call history” is on and the phone is paired."
-                )
-                else -> RecentsList(recents = recents, onDial = onDial)
+        // Recents only claim the big top area when there's actually a list. When empty or
+        // permission-gated, show a slim notice and let the keypad rise into the freed space.
+        val showList = callLogGranted && recents.isNotEmpty()
+        if (showList) {
+            Box(modifier = Modifier.weight(1f, fill = true).fillMaxWidth()) {
+                RecentsList(recents = recents, onDial = onDial)
             }
+            Spacer(Modifier.height(12.dp))
+            Dialpad(
+                entered = entered,
+                onDigit = { entered += it },
+                onBackspace = { entered = entered.dropLast(1) },
+                onClear = { entered = "" },
+                onCall = { if (entered.isNotBlank()) onDial(entered) },
+            )
+        } else {
+            if (!callLogGranted) {
+                SlimNotice("Allow call history to see recent calls.", onTap = onRequestCallLog)
+            } else {
+                SlimNotice(
+                    "No recent calls yet. They sync over Bluetooth when “share call history” is on."
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            Dialpad(
+                entered = entered,
+                onDigit = { entered += it },
+                onBackspace = { entered = entered.dropLast(1) },
+                onClear = { entered = "" },
+                onCall = { if (entered.isNotBlank()) onDial(entered) },
+            )
+            Spacer(Modifier.weight(1f))
         }
+    }
+}
 
-        Spacer(Modifier.height(12.dp))
-        // --- Dialpad (bottom) ---
-        Dialpad(
-            entered = entered,
-            onDigit = { entered += it },
-            onBackspace = { entered = entered.dropLast(1) },
-            onClear = { entered = "" },
-            onCall = { if (entered.isNotBlank()) onDial(entered) },
+/** A compact one-line notice (optionally tappable) used in place of a big empty card. */
+@Composable
+private fun SlimNotice(text: String, onTap: (() -> Unit)? = null) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onTap != null) Modifier.clickable { onTap() } else Modifier),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        ),
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
         )
     }
 }
@@ -188,14 +223,12 @@ private fun Dialpad(
                 modifier = Modifier.weight(1f),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
-            if (entered.isNotEmpty()) {
-                IconButton(
-                    onClick = onBackspace,
-                    modifier = Modifier.size(48.dp),
-                ) { Icon(Icons.Filled.Backspace, contentDescription = "Delete") }
-            } else {
-                Spacer(Modifier.width(48.dp))
-            }
+            // Always present so it reads as a permanent key; just disabled (dimmed) when empty.
+            IconButton(
+                onClick = onBackspace,
+                enabled = entered.isNotEmpty(),
+                modifier = Modifier.size(48.dp),
+            ) { Icon(Icons.Filled.Backspace, contentDescription = "Delete") }
         }
         Spacer(Modifier.height(8.dp))
         val rows = listOf(
@@ -215,21 +248,21 @@ private fun Dialpad(
             }
             Spacer(Modifier.height(6.dp))
         }
-        Spacer(Modifier.height(6.dp))
-        // Big call button
+        Spacer(Modifier.height(8.dp))
+        // Big call button — vivid green so the primary action pops.
         FilledIconButton(
             onClick = onCall,
             enabled = entered.isNotBlank(),
-            modifier = Modifier.size(72.dp),
+            modifier = Modifier.size(84.dp),
             shape = CircleShape,
             colors = IconButtonDefaults.filledIconButtonColors(
-                containerColor = MaterialTheme.colorScheme.secondary,
-                contentColor = MaterialTheme.colorScheme.onSecondary,
-                disabledContainerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f),
-                disabledContentColor = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.5f),
+                containerColor = CallGreen,
+                contentColor = Color.White,
+                disabledContainerColor = CallGreen.copy(alpha = 0.3f),
+                disabledContentColor = Color.White.copy(alpha = 0.5f),
             ),
         ) {
-            Icon(Icons.Filled.Call, contentDescription = "Call", modifier = Modifier.size(34.dp))
+            Icon(Icons.Filled.Call, contentDescription = "Call", modifier = Modifier.size(38.dp))
         }
     }
 }
