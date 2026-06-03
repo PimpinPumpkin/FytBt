@@ -7,6 +7,21 @@ apps rather than replacing them.
 > **Designed and tested on a 1024×768 vertical "Tesla-style" head-unit screen** (portrait,
 > 768 px wide × 1024 px tall). The whole UI assumes that tall, narrow, finger-operated layout.
 
+## Screenshots
+
+<p align="center"><img src="screenshots/now_playing.png" width="320" alt="Now Playing"></p>
+
+<p align="center">
+  <img src="screenshots/bluetooth.png" width="250" alt="Bluetooth / pairing">
+  &nbsp;
+  <img src="screenshots/dialer.png" width="250" alt="Dialer">
+  &nbsp;
+  <img src="screenshots/contacts.png" width="250" alt="Contacts">
+</p>
+
+<sub>Now Playing (no-art accent fallback shown), the Bluetooth/pairing pane, the dialer, and contacts.
+Device names and addresses are placeholders.</sub>
+
 ## Why this exists
 
 I bought this head unit from the **WDFL Car** store on AliExpress, and its **stock Bluetooth app
