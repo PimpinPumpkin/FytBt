@@ -56,6 +56,13 @@ class MainActivity : ComponentActivity() {
         prefs.edit().putString("theme_mode", mode.name).apply()
     }
 
+    // Material You: pull the accent from the device's system colors instead of a fixed swatch.
+    private val dynamicColor = MutableStateFlow(false)
+    private fun setDynamicColor(enabled: Boolean) {
+        dynamicColor.value = enabled
+        prefs.edit().putBoolean("dynamic_color", enabled).apply()
+    }
+
     private val requestPerms = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
@@ -138,14 +145,16 @@ class MainActivity : ComponentActivity() {
         themeMode.value = runCatching {
             ThemeMode.valueOf(prefs.getString("theme_mode", ThemeMode.DARK.name)!!)
         }.getOrDefault(ThemeMode.DARK)
+        dynamicColor.value = prefs.getBoolean("dynamic_color", false)
 
         setContent {
             val artColors by nowPlaying.artColors.collectAsState()
             val accentArgb by fallbackAccent.collectAsState()
             val mode by themeMode.collectAsState()
+            val dynamic by dynamicColor.collectAsState()
             // Whole-app accent = album-art accent if present, else the user's chosen fallback.
             val liveAccent = artColors?.accent ?: accentArgb
-            FytBtTheme(accent = liveAccent, themeMode = mode) {
+            FytBtTheme(accent = liveAccent, themeMode = mode, dynamicColor = dynamic) {
                 val adapterEnabled by controller.adapterEnabled.collectAsState()
                 val scanMode by controller.scanMode.collectAsState()
                 val discoverableUntil by controller.discoverableUntil.collectAsState()
@@ -228,6 +237,8 @@ class MainActivity : ComponentActivity() {
                             onConnect = { controller.connectA2dpSink(it) },
                             fallbackAccent = accentArgb,
                             onPickAccent = { setFallbackAccent(it) },
+                            dynamicColor = dynamic,
+                            onSetDynamicColor = { setDynamicColor(it) },
                             takeOverOnOpen = takeOverOnOpen,
                             onToggleTakeOverOnOpen = { setClaimOnOpen(it) },
                             themeMode = mode,
