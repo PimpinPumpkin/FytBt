@@ -25,7 +25,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ButtonDefaults
@@ -48,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import com.fytbt.ui.theme.ThemeMode
 import androidx.compose.ui.graphics.luminance
@@ -78,6 +81,8 @@ fun BluetoothScreen(
     onConnect: (BtDevice) -> Unit,
     fallbackAccent: Int,
     onPickAccent: (Int) -> Unit,
+    dynamicColor: Boolean,
+    onSetDynamicColor: (Boolean) -> Unit,
     takeOverOnOpen: Boolean,
     onToggleTakeOverOnOpen: (Boolean) -> Unit,
     themeMode: ThemeMode,
@@ -127,7 +132,12 @@ fun BluetoothScreen(
         Spacer(Modifier.height(22.dp))
         ThemePicker(selected = themeMode, onSelect = onSetThemeMode)
         Spacer(Modifier.height(22.dp))
-        AccentPicker(selected = fallbackAccent, onPick = onPickAccent)
+        AccentPicker(
+            selected = fallbackAccent,
+            onPick = onPickAccent,
+            dynamicColor = dynamicColor,
+            onSetDynamicColor = onSetDynamicColor,
+        )
         Spacer(Modifier.height(16.dp))
     }
 }
@@ -200,39 +210,104 @@ private fun TakeOverToggle(enabled: Boolean, onToggle: (Boolean) -> Unit) {
     }
 }
 
-/** Lets the user choose the player accent used when there's no album art to pull colors from. */
+/** Lets the user choose the player accent used when there's no album art to pull colors from:
+ *  a preset swatch, an arbitrary custom color, or Material You (the device's own colors). */
 @Composable
-private fun AccentPicker(selected: Int, onPick: (Int) -> Unit) {
-    SectionLabel("Player accent (no artwork)")
-    Spacer(Modifier.height(8.dp))
+private fun AccentPicker(
+    selected: Int,
+    onPick: (Int) -> Unit,
+    dynamicColor: Boolean,
+    onSetDynamicColor: (Boolean) -> Unit,
+) {
+    var showColorPicker by remember { mutableStateOf(false) }
+    if (showColorPicker) {
+        ColorPickerDialog(
+            initial = selected,
+            onConfirm = { onPick(it); showColorPicker = false },
+            onDismiss = { showColorPicker = false },
+        )
+    }
+
     Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth().clickable { onSetDynamicColor(!dynamicColor) }.padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ACCENT_PRESETS.forEach { argb ->
-            val color = Color(argb)
-            val isSelected = argb == selected
+        Column(Modifier.weight(1f)) {
+            Text(
+                "Material You",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "Pull the accent from the device's colors",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(checked = dynamicColor, onCheckedChange = onSetDynamicColor)
+    }
+
+    if (!dynamicColor) {
+        Spacer(Modifier.height(16.dp))
+        SectionLabel("Player accent (no artwork)")
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ACCENT_PRESETS.forEach { argb ->
+                val color = Color(argb)
+                val isSelected = argb == selected
+                Box(
+                    modifier = Modifier
+                        .padding(end = 12.dp)
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                        .then(
+                            if (isSelected) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                            else Modifier
+                        )
+                        .clickable { onPick(argb) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (isSelected) {
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = "Selected",
+                            tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
+            }
+            // Custom-color swatch: rainbow + "+" to invite, or the active custom color + pencil.
+            val isCustom = selected !in ACCENT_PRESETS
+            val rainbow = Brush.sweepGradient(
+                (0..6).map { Color.hsv(it * 60f, 0.85f, 1f) } + Color.hsv(0f, 0.85f, 1f)
+            )
             Box(
                 modifier = Modifier
                     .padding(end = 12.dp)
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(color)
+                    .then(if (isCustom) Modifier.background(Color(selected)) else Modifier.background(rainbow))
                     .then(
-                        if (isSelected) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                        if (isCustom) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
                         else Modifier
                     )
-                    .clickable { onPick(argb) },
+                    .clickable { showColorPicker = true },
                 contentAlignment = Alignment.Center,
             ) {
-                if (isSelected) {
-                    Icon(
-                        Icons.Filled.Check,
-                        contentDescription = "Selected",
-                        tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
+                Icon(
+                    imageVector = if (isCustom) Icons.Filled.Edit else Icons.Filled.Add,
+                    contentDescription = "Custom color",
+                    tint = if (isCustom && Color(selected).luminance() > 0.5f) Color.Black else Color.White,
+                    modifier = Modifier.size(20.dp),
+                )
             }
         }
     }
