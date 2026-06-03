@@ -41,13 +41,23 @@ testing it took to figure this hardware out. Start there if you want the "why."
 See `spec.md` (or the original build spec) for the full set of verified device facts
 and constraints. The short version:
 
-- UNISOC UIS7870SC, Android 13 (API 33), AOSP, **non-rooted**, portrait 768×1024.
+- Developed on a UNISOC UIS7870SC, Android 13 (API 33), AOSP, **non-rooted**, portrait 768×1024.
+- **`minSdk` is 29 (Android 10)**, so it should also run on older UNISOC FYT units (e.g. a 7862 on
+  Android 10) — the new runtime Bluetooth permissions are API 31+, so on 29–30 it falls back to the
+  legacy `BLUETOOTH`/`BLUETOOTH_ADMIN` model. *Only the API-33 unit is tested; Android 10 is
+  untested on hardware but builds clean and the same Compose stack runs on Android 10 elsewhere.*
 - The unit is the **A2DP sink** (`A2dpSinkService`). The phone is the source.
 - An **MCU** under Android owns audio routing: one active source at a time, identified by an
   integer `APP_ID`. Source switching bypasses Android audio focus, so the only reliable signal is
   the MCU's `APP_ID`, read live over the SYU vendor IPC. See `FINDINGS.md` §1–3.
 - Discoverable mode is hard-capped at 300 s by the OS. We do not try to exceed this.
-- HFP / SCO / call audio is explicitly **out of scope** (system-only).
+- **Calls / HFP are intentionally minimal.** On the dev unit the microphone is **broken during
+  calls by a firmware bug** (a Bluetooth call wedges the unit mic until reboot — see `FINDINGS.md`
+  §10), so there's deliberately **no in-call screen** (no hang-up / active-call UI). The dialer just
+  places the call and hands it to the stock app. On that unit, calls are set to **stay on the
+  phone** (Media audio on, Phone/Call audio off in the phone's Bluetooth settings), so the dialer is
+  used to start a call you then take on the handset. HFP / SCO / call audio routing is otherwise
+  system-only and out of scope.
 
 ## MVP scope (built)
 
@@ -114,6 +124,32 @@ adb shell monkey -p com.fytbt 1
 ```
 
 No signing setup needed for debug builds.
+
+## Releases (signed APK + in-place updates)
+
+Pushing a `v*` tag triggers `.github/workflows/release.yml`, which builds a signed release APK and
+attaches it to a GitHub Release as `FytBt-<tag>.apk`. Because every release is signed with the
+**same** key, you can update in place (`adb install -r`, or an app like
+[Obtainium](https://github.com/ImranR98/Obtainium) pointed at the repo) without the
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE` "signatures don't match" error.
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0     # CI builds + publishes the release
+```
+
+Signing is wired in `app/build.gradle.kts` (`signingConfigs.releaseFromEnv`): CI decodes a keystore
+from secrets into env vars; **local** `assembleRelease` (and forks) fall back to the per-machine
+debug key. Set three repo secrets to enable signed CI releases:
+
+| Secret | Value |
+|---|---|
+| `FYTBT_KEYSTORE_BASE64` | `base64 -i your-release.jks` |
+| `FYTBT_KEYSTORE_PASSWORD` | the keystore's store/key password |
+| `FYTBT_KEY_ALIAS` | the key alias (e.g. `fytbt`) |
+
+> One-time when switching a unit from a debug build to release builds: uninstall first
+> (`adb uninstall com.fytbt`), since the debug and release certs differ. After that, all release
+> updates apply in place.
 
 ## What to verify on first install (MVP acceptance)
 

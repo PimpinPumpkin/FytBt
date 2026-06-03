@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -148,7 +149,7 @@ class MainActivity : ComponentActivity() {
                 val takeOverOnOpen by claimOnOpen.collectAsState()
 
                 LaunchedEffect(Unit) {
-                    if (!granted) requestPerms.launch(REQUIRED_PERMISSIONS)
+                    if (!granted && REQUIRED_PERMISSIONS.isNotEmpty()) requestPerms.launch(REQUIRED_PERMISSIONS)
                 }
 
                 RootScreen(
@@ -196,7 +197,7 @@ class MainActivity : ComponentActivity() {
                             a2dpSinkConnected = a2dpConnected,
                             adapterName = adapterName,
                             permissionsGranted = granted,
-                            onRequestPermissions = { requestPerms.launch(REQUIRED_PERMISSIONS) },
+                            onRequestPermissions = { if (REQUIRED_PERMISSIONS.isNotEmpty()) requestPerms.launch(REQUIRED_PERMISSIONS) },
                             onRequestEnableBluetooth = {
                                 runCatching { startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)) }
                             },
@@ -257,10 +258,18 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val STOCK_BT_PACKAGE = "com.syu.bt"
         private const val DEFAULT_ACCENT = 0xFF7AB7FF.toInt()  // the theme's blue primary
-        private val REQUIRED_PERMISSIONS = arrayOf(
-            Manifest.permission.BLUETOOTH_CONNECT,
-            Manifest.permission.BLUETOOTH_SCAN,
-            Manifest.permission.BLUETOOTH_ADVERTISE,
-        )
+        // API 31+ gates Bluetooth behind runtime permissions; API 29–30 use the legacy
+        // BLUETOOTH / BLUETOOTH_ADMIN normal permissions (granted at install), so there's nothing
+        // to request at runtime for pairing / discoverable on those.
+        private val REQUIRED_PERMISSIONS: Array<String> =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                arrayOf(
+                    Manifest.permission.BLUETOOTH_CONNECT,
+                    Manifest.permission.BLUETOOTH_SCAN,
+                    Manifest.permission.BLUETOOTH_ADVERTISE,
+                )
+            } else {
+                emptyArray()
+            }
     }
 }
