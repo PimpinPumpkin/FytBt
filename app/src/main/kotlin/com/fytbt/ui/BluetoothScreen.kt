@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,8 +22,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -81,7 +80,15 @@ fun BluetoothScreen(
     takeOverOnOpen: Boolean,
     onToggleTakeOverOnOpen: (Boolean) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    // The whole page scrolls as one — the paired list renders all devices inline (rather than
+    // being squeezed into a fixed weighted box), so it extends as far as it needs and the settings
+    // below it are reached by scrolling instead of cramming everything onto one fixed screen.
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
         HeaderCard(
             adapterEnabled = adapterEnabled,
             scanMode = scanMode,
@@ -94,7 +101,7 @@ fun BluetoothScreen(
             onStopDiscoverable = onStopDiscoverable,
             onSetAdapterName = onSetAdapterName,
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(22.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             SectionLabel("Paired devices")
             Spacer(Modifier.weight(1f))
@@ -110,12 +117,13 @@ fun BluetoothScreen(
             a2dpSinkConnected = a2dpSinkConnected,
             onUnpair = onUnpair,
             onConnect = onConnect,
-            modifier = Modifier.weight(1f, fill = true).fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(26.dp))
         TakeOverToggle(enabled = takeOverOnOpen, onToggle = onToggleTakeOverOnOpen)
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(22.dp))
         AccentPicker(selected = fallbackAccent, onPick = onPickAccent)
+        Spacer(Modifier.height(16.dp))
     }
 }
 
@@ -470,13 +478,15 @@ private fun PairedList(
         compareByDescending<BtDevice> { a2dpSinkConnected.contains(it.address) }
             .thenBy { it.displayName.lowercase() }
     )
+    // Plain Column (not LazyColumn): this lives inside the page's verticalScroll, and the paired
+    // set is tiny, so rendering all rows is correct and lets the whole page scroll as one.
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
-        LazyColumn {
-            items(sorted, key = { it.address }) { d ->
+        Column {
+            sorted.forEachIndexed { i, d ->
                 val connected = a2dpSinkConnected.contains(d.address)
                 PairedDeviceRow(
                     device = d,
@@ -484,7 +494,9 @@ private fun PairedList(
                     onConnect = { onConnect(d) },
                     onUnpair = { onUnpair(d) },
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                if (i < sorted.lastIndex) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                }
             }
         }
     }
@@ -596,7 +608,7 @@ private fun EmptyState(text: String, modifier: Modifier = Modifier) {
         ),
     ) {
         Box(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(
