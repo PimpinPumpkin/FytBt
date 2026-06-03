@@ -458,16 +458,20 @@ class BluetoothController(private val appContext: Context) {
         rssi = rssi,
     )
 
+    // On API 31+ these are runtime permissions; on 29–30 the legacy BLUETOOTH / BLUETOOTH_ADMIN
+    // are normal permissions granted at install, so the capability is always present there.
+    private val legacyBt: Boolean get() = Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+
     private fun hasConnectPerm(): Boolean =
-        ContextCompat.checkSelfPermission(appContext, Manifest.permission.BLUETOOTH_CONNECT) ==
+        legacyBt || ContextCompat.checkSelfPermission(appContext, Manifest.permission.BLUETOOTH_CONNECT) ==
             PackageManager.PERMISSION_GRANTED
 
     private fun hasScanPerm(): Boolean =
-        ContextCompat.checkSelfPermission(appContext, Manifest.permission.BLUETOOTH_SCAN) ==
+        legacyBt || ContextCompat.checkSelfPermission(appContext, Manifest.permission.BLUETOOTH_SCAN) ==
             PackageManager.PERMISSION_GRANTED
 
     private fun hasAdvertisePerm(): Boolean =
-        ContextCompat.checkSelfPermission(appContext, Manifest.permission.BLUETOOTH_ADVERTISE) ==
+        legacyBt || ContextCompat.checkSelfPermission(appContext, Manifest.permission.BLUETOOTH_ADVERTISE) ==
             PackageManager.PERMISSION_GRANTED
 
     companion object {
