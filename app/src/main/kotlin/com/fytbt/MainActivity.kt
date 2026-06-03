@@ -49,8 +49,8 @@ class MainActivity : ComponentActivity() {
         prefs.edit().putBoolean(NowPlayingController.KEY_CLAIM_ON_OPEN, enabled).apply()
     }
 
-    // Light / dark / follow-system. Default dark (the app was designed dark for night driving).
-    private val themeMode = MutableStateFlow(ThemeMode.DARK)
+    // Light / dark / follow-system. Default System so the unit's day/night drives it.
+    private val themeMode = MutableStateFlow(ThemeMode.SYSTEM)
     private fun setThemeMode(mode: ThemeMode) {
         themeMode.value = mode
         prefs.edit().putString("theme_mode", mode.name).apply()
@@ -143,8 +143,8 @@ class MainActivity : ComponentActivity() {
         fallbackAccent.value = prefs.getInt("fallback_accent", DEFAULT_ACCENT)
         claimOnOpen.value = prefs.getBoolean(NowPlayingController.KEY_CLAIM_ON_OPEN, true)
         themeMode.value = runCatching {
-            ThemeMode.valueOf(prefs.getString("theme_mode", ThemeMode.DARK.name)!!)
-        }.getOrDefault(ThemeMode.DARK)
+            ThemeMode.valueOf(prefs.getString("theme_mode", ThemeMode.SYSTEM.name)!!)
+        }.getOrDefault(ThemeMode.SYSTEM)
         dynamicColor.value = prefs.getBoolean("dynamic_color", false)
 
         setContent {
