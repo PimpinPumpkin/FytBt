@@ -23,6 +23,8 @@ import com.fytbt.ui.NowPlayingScreen
 import com.fytbt.ui.PhoneScreen
 import com.fytbt.ui.RootScreen
 import com.fytbt.ui.theme.FytBtTheme
+import com.fytbt.ui.theme.NowPlayingDarkTheme
+import com.fytbt.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
@@ -45,6 +47,13 @@ class MainActivity : ComponentActivity() {
     private fun setClaimOnOpen(enabled: Boolean) {
         claimOnOpen.value = enabled
         prefs.edit().putBoolean(NowPlayingController.KEY_CLAIM_ON_OPEN, enabled).apply()
+    }
+
+    // Light / dark / follow-system. Default dark (the app was designed dark for night driving).
+    private val themeMode = MutableStateFlow(ThemeMode.DARK)
+    private fun setThemeMode(mode: ThemeMode) {
+        themeMode.value = mode
+        prefs.edit().putString("theme_mode", mode.name).apply()
     }
 
     private val requestPerms = registerForActivityResult(
@@ -126,9 +135,17 @@ class MainActivity : ComponentActivity() {
         refreshPhonePerms()
         fallbackAccent.value = prefs.getInt("fallback_accent", DEFAULT_ACCENT)
         claimOnOpen.value = prefs.getBoolean(NowPlayingController.KEY_CLAIM_ON_OPEN, true)
+        themeMode.value = runCatching {
+            ThemeMode.valueOf(prefs.getString("theme_mode", ThemeMode.DARK.name)!!)
+        }.getOrDefault(ThemeMode.DARK)
 
         setContent {
-            FytBtTheme {
+            val artColors by nowPlaying.artColors.collectAsState()
+            val accentArgb by fallbackAccent.collectAsState()
+            val mode by themeMode.collectAsState()
+            // Whole-app accent = album-art accent if present, else the user's chosen fallback.
+            val liveAccent = artColors?.accent ?: accentArgb
+            FytBtTheme(accent = liveAccent, themeMode = mode) {
                 val adapterEnabled by controller.adapterEnabled.collectAsState()
                 val scanMode by controller.scanMode.collectAsState()
                 val discoverableUntil by controller.discoverableUntil.collectAsState()
@@ -141,11 +158,9 @@ class MainActivity : ComponentActivity() {
                 val hasSession by nowPlaying.hasSession.collectAsState()
                 val metadata by nowPlaying.metadata.collectAsState()
                 val playback by nowPlaying.playback.collectAsState()
-                val artColors by nowPlaying.artColors.collectAsState()
 
                 val contactsOk by contactsGranted.collectAsState()
                 val callLogOk by callLogGranted.collectAsState()
-                val accentArgb by fallbackAccent.collectAsState()
                 val takeOverOnOpen by claimOnOpen.collectAsState()
 
                 LaunchedEffect(Unit) {
@@ -156,22 +171,26 @@ class MainActivity : ComponentActivity() {
                     artColors = artColors,
                     fallbackAccent = accentArgb,
                     nowPlayingContent = {
-                        NowPlayingScreen(
-                            hasNotificationAccess = hasNotificationAccess,
-                            hasSession = hasSession,
-                            metadata = metadata,
-                            playback = playback,
-                            artColors = artColors,
-                            fallbackAccent = accentArgb,
-                            onGrantNotificationAccess = { nowPlaying.openNotificationAccessSettings() },
-                            onRefreshAccess = {
-                                nowPlaying.refreshAccess()
-                                nowPlaying.start()
-                            },
-                            onPlayPause = { nowPlaying.playPauseToggle() },
-                            onSkipNext = { nowPlaying.skipNext() },
-                            onSkipPrev = { nowPlaying.skipPrev() },
-                        )
+                        // The media screen is always dark (art under a scrim / accent-on-black), so
+                        // it keeps light text regardless of the app's light/dark setting.
+                        NowPlayingDarkTheme(accent = liveAccent) {
+                            NowPlayingScreen(
+                                hasNotificationAccess = hasNotificationAccess,
+                                hasSession = hasSession,
+                                metadata = metadata,
+                                playback = playback,
+                                artColors = artColors,
+                                fallbackAccent = accentArgb,
+                                onGrantNotificationAccess = { nowPlaying.openNotificationAccessSettings() },
+                                onRefreshAccess = {
+                                    nowPlaying.refreshAccess()
+                                    nowPlaying.start()
+                                },
+                                onPlayPause = { nowPlaying.playPauseToggle() },
+                                onSkipNext = { nowPlaying.skipNext() },
+                                onSkipPrev = { nowPlaying.skipPrev() },
+                            )
+                        }
                     },
                     phoneContent = {
                         PhoneScreen(
@@ -211,6 +230,8 @@ class MainActivity : ComponentActivity() {
                             onPickAccent = { setFallbackAccent(it) },
                             takeOverOnOpen = takeOverOnOpen,
                             onToggleTakeOverOnOpen = { setClaimOnOpen(it) },
+                            themeMode = mode,
+                            onSetThemeMode = { setThemeMode(it) },
                         )
                     },
                 )
