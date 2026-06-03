@@ -30,8 +30,6 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -42,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -50,6 +49,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -116,6 +116,16 @@ fun NowPlayingScreen(
                     .blur(45.dp),
             )
             Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
+        } else {
+            // No album art: a soft accent wash top-to-bottom so the screen reads as intentional
+            // rather than an empty black void.
+            Box(
+                modifier = Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(
+                        listOf(accent.copy(alpha = 0.20f), Color.Black, Color.Black)
+                    )
+                )
+            )
         }
         Column(
             modifier = Modifier
@@ -129,7 +139,7 @@ fun NowPlayingScreen(
                 modifier = Modifier.weight(1f, fill = true).fillMaxWidth(),
                 contentAlignment = Alignment.Center,
             ) {
-                Artwork(art = metadata?.art?.asImageBitmap())
+                Artwork(art = artBitmap, accent = accent)
             }
             Spacer(Modifier.height(16.dp))
             TrackInfo(metadata = metadata, hasSession = hasSession)
@@ -155,7 +165,7 @@ fun NowPlayingScreen(
 }
 
 @Composable
-private fun Artwork(art: ImageBitmap?) {
+private fun Artwork(art: ImageBitmap?, accent: Color) {
     // Square, sized to whatever the parent weighted Box leaves — fills its height, capped
     // by width. Centerpiece of the screen, soft shadow.
     Card(
@@ -166,20 +176,29 @@ private fun Artwork(art: ImageBitmap?) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
     ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (art != null) {
-                Image(
-                    bitmap = art,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
+        if (art != null) {
+            Image(
+                bitmap = art,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            // No art: an accent-tinted gradient tile with a glyph in the accent, so it looks
+            // designed rather than empty.
+            Box(
+                modifier = Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(
+                        listOf(accent.copy(alpha = 0.35f), accent.copy(alpha = 0.10f))
+                    )
+                ),
+                contentAlignment = Alignment.Center,
+            ) {
                 Text(
                     "♪",
                     fontSize = 140.sp,
                     fontWeight = FontWeight.Light,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                    color = accent.copy(alpha = 0.65f),
                 )
             }
         }
@@ -252,21 +271,26 @@ private fun ProgressRow(
     } else 0f
 
     // Display-only: this is an A2DP-sink relay, and AVRCP seek-to-position isn't honored by the
-    // source (dragging just snapped back). So the playhead shows position but isn't a scrubber.
+    // source (dragging just snapped back). So this is a clean progress READOUT, not a scrubber —
+    // no thumb, no end-stop dot (which a Slider would draw and read as a broken control).
     Column(modifier = Modifier.fillMaxWidth()) {
-        Slider(
-            value = sliderValue,
-            onValueChange = {},
-            valueRange = 0f..1f,
-            enabled = false,
-            colors = SliderDefaults.colors(
-                disabledThumbColor = accent,
-                disabledActiveTrackColor = accent,
-                disabledInactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-            ),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(sliderValue)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(accent),
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp)) {
             Text(
                 formatTime(displayedPos),
                 style = MaterialTheme.typography.bodyMedium,
