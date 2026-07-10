@@ -9,7 +9,7 @@ import java.net.URL
 import java.net.URLEncoder
 
 /**
- * Looks up album art online when the phone doesn't send it over Bluetooth (Spotify, iPhones —
+ * Looks up album art online when the phone doesn't send it over Bluetooth (Spotify, iPhones;
  * they transmit only title/artist text over AVRCP). Uses Apple's free iTunes Search API: no key,
  * no auth, and the artwork URL is upgradeable to a high resolution.
  *
@@ -23,7 +23,7 @@ object OnlineArt {
     /**
      * Returns a hi-res artwork URL for the track, or null if none found / no confident match.
      * Fetches several candidates and verifies the result's artist + title actually match what we
-     * asked for — taking iTunes' first result blindly was pulling wrong albums. A weak match
+     * asked for; taking iTunes' first result blindly was pulling wrong albums. A weak match
      * returns null (placeholder) rather than showing the wrong cover.
      */
     fun lookupArtworkUrl(artist: String?, title: String?): String? {

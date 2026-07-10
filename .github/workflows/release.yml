@@ -48,7 +48,7 @@ jobs:
             echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/fytbt-release.jks"
             echo "Decoded keystore ($(stat -c%s "$RUNNER_TEMP/fytbt-release.jks") bytes)"
           else
-            echo "No FYTBT_KEYSTORE_BASE64 secret set — falling back to debug signing."
+            echo "No FYTBT_KEYSTORE_BASE64 secret set, falling back to debug signing."
           fi
 
       - name: Build release APK

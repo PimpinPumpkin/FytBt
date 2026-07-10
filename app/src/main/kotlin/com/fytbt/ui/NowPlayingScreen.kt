@@ -166,7 +166,7 @@ fun NowPlayingScreen(
 
 @Composable
 private fun Artwork(art: ImageBitmap?, accent: Color) {
-    // Square, sized to whatever the parent weighted Box leaves — fills its height, capped
+    // Square, sized to whatever the parent weighted Box leaves: fills its height, capped
     // by width. Centerpiece of the screen, soft shadow.
     Card(
         modifier = Modifier
@@ -271,7 +271,7 @@ private fun ProgressRow(
     } else 0f
 
     // Display-only: this is an A2DP-sink relay, and AVRCP seek-to-position isn't honored by the
-    // source (dragging just snapped back). So this is a clean progress READOUT, not a scrubber —
+    // source (dragging just snapped back). So this is a clean progress READOUT, not a scrubber:
     // no thumb, no end-stop dot (which a Slider would draw and read as a broken control).
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(
@@ -488,7 +488,7 @@ private fun NotificationAccessGate(onGrant: () -> Unit, onRecheck: () -> Unit) {
                 onClick = onRecheck,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                 shape = RoundedCornerShape(14.dp),
-            ) { Text("I've enabled it — check again", fontSize = 15.sp) }
+            ) { Text("I've enabled it, check again", fontSize = 15.sp) }
         }
     }
 }

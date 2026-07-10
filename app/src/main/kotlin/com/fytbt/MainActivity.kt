@@ -43,7 +43,7 @@ class MainActivity : ComponentActivity() {
         prefs.edit().putInt("fallback_accent", argb).apply()
     }
 
-    // "Take over audio when opened" — opening the app claims Bluetooth (kills radio / pauses other
+    // "Take over audio when opened": opening the app claims Bluetooth (kills radio / pauses other
     // players). On by default; the controller reads this pref directly. Persisted.
     private val claimOnOpen = MutableStateFlow(true)
     private fun setClaimOnOpen(enabled: Boolean) {
@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity() {
 
     /** Place a call to [number]. With CALL_PHONE we dial directly (routed to the stock app over
      *  HFP); without it we open the dialer prefilled. Outbound call audio/mic is the known-broken
-     *  firmware bug — the call connects regardless. */
+     *  firmware bug; the call connects regardless. */
     private fun dial(number: String) {
         if (number.isBlank()) return
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
@@ -115,7 +115,7 @@ class MainActivity : ComponentActivity() {
         val uri = Uri.fromParts("tel", number, null)
         val action = if (allowDirectCall) Intent.ACTION_CALL else Intent.ACTION_DIAL
         // Route straight to the stock SYU Bluetooth phone: it owns the HFP call, shows the in-call
-        // UI, and lets you hang up on the unit — and targeting it skips the "how do you want to
+        // UI, and lets you hang up on the unit. Targeting it also skips the "how do you want to
         // dial?" chooser (the system dialer route has no UI and forces a hang-up on the phone).
         val stock = Intent(action, uri)
             .setPackage(STOCK_BT_PACKAGE)
@@ -182,7 +182,7 @@ class MainActivity : ComponentActivity() {
                 // dynamic color is on, else the album-art accent / chosen fallback. The tab bar and
                 // Now Playing must use THIS (not the raw fallback) so they follow Material You too.
                 val effectiveAccent = MaterialTheme.colorScheme.primary.toArgb()
-                // With Material You on, the accent comes from the system, not the art palette — so
+                // With Material You on, the accent comes from the system, not the art palette, so
                 // suppress artColors for the *accent* (the blurred-art background still uses metadata).
                 val accentArt = if (dynamic) null else artColors
 
@@ -270,7 +270,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Notification access may have just been granted in Settings — re-check on resume.
+        // Notification access may have just been granted in Settings; re-check on resume.
         if (nowPlaying.refreshAccess()) nowPlaying.start()
         // Coming back to our app reclaims the head unit's audio source for Bluetooth
         // (kills the radio, resumes the phone if it was interrupted).

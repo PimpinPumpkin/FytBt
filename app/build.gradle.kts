@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId = "com.fytbt"
-        // Android 10 (API 29) and up — the new runtime BT permissions are 31+, but we branch to the
+        // Android 10 (API 29) and up; the new runtime BT permissions are 31+, but we branch to the
         // legacy BLUETOOTH/BLUETOOTH_ADMIN + location model on 29–30 (see MainActivity/BluetoothController).
         minSdk = 29
         targetSdk = 33
@@ -24,11 +24,11 @@ android {
     }
 
     // Real release signing, populated from env vars set by CI (.github/workflows/release.yml):
-    //   FYTBT_KEYSTORE_PATH       — absolute path to a decoded .jks
-    //   FYTBT_KEYSTORE_PASSWORD   — store password (also used as the key password)
-    //   FYTBT_KEY_ALIAS           — alias inside the keystore (defaults to "fytbt")
+    //   FYTBT_KEYSTORE_PATH       - absolute path to a decoded .jks
+    //   FYTBT_KEYSTORE_PASSWORD   - store password (also used as the key password)
+    //   FYTBT_KEY_ALIAS           - alias inside the keystore (defaults to "fytbt")
     // When unset (local dev, forks), the release build falls back to the per-machine debug keystore
-    // below — local builds still work, just signed with a different cert. In-place upgrades only
+    // below; local builds still work, just signed with a different cert. In-place upgrades only
     // matter between releases that BOTH come from CI, so the fallback is fine for development.
     signingConfigs {
         create("releaseFromEnv") {
@@ -47,7 +47,7 @@ android {
             isMinifyEnabled = false
         }
         release {
-            // Kept unminified for now — the reflective BT calls + SYU binder IPC aren't R8-audited yet.
+            // Kept unminified for now: the reflective BT calls + SYU binder IPC aren't R8-audited yet.
             isMinifyEnabled = false
             val envSigning = signingConfigs.getByName("releaseFromEnv")
             signingConfig = if (envSigning.storeFile?.exists() == true) {

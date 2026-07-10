@@ -8,13 +8,13 @@ import java.io.File
 
 /**
  * On-disk cache of album art keyed by "artist|title". Lets art that was fetched online (while on
- * WiFi or tethered) persist and show OFFLINE on later drives — the common case, since people replay
+ * WiFi or tethered) persist and show OFFLINE on later drives. That's the common case, since people replay
  * the same albums/playlists. Stored in filesDir (survives reboots/cache-clears).
  */
 object ArtCache {
     private const val TAG = "FytBt"
 
-    // Bumped to v2 when the matching logic changed — abandons any wrongly-matched art cached by the
+    // Bumped to v2 when the matching logic changed: abandons any wrongly-matched art cached by the
     // old (take-first-result) lookup so those tracks re-fetch with the verified matcher.
     private fun dir(context: Context): File =
         File(context.filesDir, "artcache_v2").apply {

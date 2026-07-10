@@ -37,7 +37,7 @@ import kotlinx.coroutines.withContext
  * `getActiveSessions()` approach:
  *   1. It locks onto the *Bluetooth* session specifically, so a local app on the unit
  *      (e.g. Spotify running on the head unit) can't steal Now Playing when the phone pauses.
- *   2. Sending play() through it nudges the A2DP-sink stream handler to request audio focus —
+ *   2. Sending play() through it nudges the A2DP-sink stream handler to request audio focus,
  *      which is what was missing when audio stayed silent until the stock app was opened.
  *
  * Album art over AVRCP arrives as a content:// URI (AvrcpCoverArtProvider), not an inline
@@ -54,7 +54,7 @@ class NowPlayingController(private val appContext: Context) {
     private var scope: CoroutineScope? = null
     private var audioFocusRequest: AudioFocusRequest? = null
 
-    // IMPORTANT: do NOT pause the phone on focus loss. This is an A2DP *sink* — the BT stack's
+    // IMPORTANT: do NOT pause the phone on focus loss. This is an A2DP *sink*: the BT stack's
     // own A2dpSinkStreamHandler grabs/releases audio focus as part of normal playback, so a LOSS
     // here usually means "the sink started playing," not "another source took over." Reacting to
     // it by pausing kills the very audio we just started. Source switching is handled by the MCU
@@ -86,7 +86,7 @@ class NowPlayingController(private val appContext: Context) {
     private var foreground = false
 
     // NOTE: the MCU-source ↔ media auto-pause/resume coordination lives in
-    // [SourceCoordinatorService] (a foreground service), NOT here — it must survive this Activity
+    // [SourceCoordinatorService] (a foreground service), NOT here; it must survive this Activity
     // being backgrounded/destroyed. This controller is now purely the Now Playing UI source.
 
     private val sessionsListener = MediaSessionManager.OnActiveSessionsChangedListener { sessions ->
@@ -95,7 +95,7 @@ class NowPlayingController(private val appContext: Context) {
     private var fallbackListening = false
 
     /**
-     * Initialize / keep media monitoring alive. Idempotent. Intentionally NOT torn down in onStop —
+     * Initialize / keep media monitoring alive. Idempotent. Intentionally NOT torn down in onStop:
      * the playback watcher must keep running while the app is backgrounded so it can pause the phone
      * when the user switches to another source (radio/local). Full teardown happens in [shutdown].
      */
@@ -107,10 +107,10 @@ class NowPlayingController(private val appContext: Context) {
         startFallback()
     }
 
-    /** App went to the background — keep monitoring alive so auto-pause still works. */
+    /** App went to the background; keep monitoring alive so auto-pause still works. */
     fun onAppBackgrounded() { foreground = false }
 
-    /** Full teardown — call from the activity's onDestroy. */
+    /** Full teardown. Call from the activity's onDestroy. */
     fun shutdown() {
         foreground = false
         stopFallback()
@@ -126,7 +126,7 @@ class NowPlayingController(private val appContext: Context) {
     //
     // Golden rule after much pain: the app NEVER auto-plays. The only time we assert play is when
     // the user explicitly presses play, or when they open the app while the phone is ALREADY
-    // playing (to route that audio onto Bluetooth). A manual pause therefore always sticks — we
+    // playing (to route that audio onto Bluetooth). A manual pause therefore always sticks; we
     // don't fight it. Now-playing state comes straight from the MediaController callback.
 
     fun play() = claimBtAudio(play = true)
@@ -143,7 +143,7 @@ class NowPlayingController(private val appContext: Context) {
 
     /**
      * Called when our app returns to the foreground. Behaves like the stock BT app: opening it
-     * CLAIMS Bluetooth as the active source — killing the radio and pausing on-unit players — but
+     * CLAIMS Bluetooth as the active source (killing the radio and pausing on-unit players) but
      * does NOT start playback (play = false): if you just open the app, it silences other sources and
      * leaves the phone where it was; you press play yourself. We only claim when Bluetooth isn't
      * ALREADY the active MCU source (currentAppId != BTAV).
@@ -192,7 +192,7 @@ class NowPlayingController(private val appContext: Context) {
     /**
      * Hold AUDIOFOCUS_GAIN so the vendor audio path treats media as active and routes the
      * Bluetooth sink stream to the speakers. We keep the request alive while playing; pausing
-     * releases it. The focus-change listener is a no-op — we own no PCM stream of our own,
+     * releases it. The focus-change listener is a no-op: we own no PCM stream of our own,
      * we're only flipping the system's "media is playing" state.
      */
     private fun acquireAudioFocus() {
@@ -306,7 +306,7 @@ class NowPlayingController(private val appContext: Context) {
         captureSnapshot(c)
         // The browser connects a few hundred ms after onResume, so onResume's claim ran with no
         // controller yet. If the app is foreground and Bluetooth isn't already the active source,
-        // claim it now that the session is live (matches onAppResumed — take over without playing).
+        // claim it now that the session is live (matches onAppResumed: take over without playing).
         if (foreground && claimOnOpenEnabled() &&
             SourceCoordinatorService.currentAppId != SyuLink.APP_ID_BTAV
         ) claimBtAudio(play = false)
@@ -373,7 +373,7 @@ class NowPlayingController(private val appContext: Context) {
                 ?: md.getString(MediaMetadata.METADATA_KEY_ART_URI)
                 ?: md.getString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)
             if (!artUri.isNullOrBlank()) loadArt(artUri, base)
-            else fetchOnlineArt(base)  // Spotify/iPhone send no BT art — look it up by title/artist.
+            else fetchOnlineArt(base)  // Spotify/iPhone send no BT art; look it up by title/artist.
         }
     }
 
@@ -389,7 +389,7 @@ class NowPlayingController(private val appContext: Context) {
         onlineArtToken = key
         scope?.launch {
             val bmp = withContext(Dispatchers.IO) {
-                // 1) Disk cache first — works fully offline once we've seen this track before.
+                // 1) Disk cache first: works fully offline once we've seen this track before.
                 ArtCache.get(appContext, key)?.let { return@withContext it }
                 // 2) Otherwise hit the network (only succeeds on WiFi / tethered) and cache the result.
                 val url = OnlineArt.lookupArtworkUrl(track.artist, title) ?: return@withContext null
@@ -420,7 +420,7 @@ class NowPlayingController(private val appContext: Context) {
                 updateArtColors(bmp)
                 Log.i(TAG, "loaded cover art from $uriString")
             } else if (bmp == null) {
-                Log.w(TAG, "failed to load cover art from $uriString — trying online")
+                Log.w(TAG, "failed to load cover art from $uriString, trying online")
                 fetchOnlineArt(forTrack)
             }
         }
@@ -456,7 +456,7 @@ class NowPlayingController(private val appContext: Context) {
         var right = w - 1; while (right > left && colDark(right)) right--
         val nw = right - left + 1
         val nh = bottom - top + 1
-        // No bars found, or it'd crop away most of the image — keep the original.
+        // No bars found, or it'd crop away most of the image; keep the original.
         if (nw == w && nh == h) return src
         if (nw < w / 3 || nh < h / 3) return src
         return runCatching { android.graphics.Bitmap.createBitmap(src, left, top, nw, nh) }.getOrDefault(src)
@@ -528,7 +528,7 @@ class NowPlayingController(private val appContext: Context) {
         const val BT_BROWSER_SERVICE = "com.android.bluetooth.avrcpcontroller.BluetoothMediaBrowserService"
         // The SYU source switch is a play/pause toggle; firing it twice quickly cancels out.
         private const val CLAIM_DEBOUNCE_MS = 1500L
-        // Shared with MainActivity — "take over audio on open" setting (default on).
+        // Shared with MainActivity: "take over audio on open" setting (default on).
         const val PREFS = "fytbt"
         const val KEY_CLAIM_ON_OPEN = "claim_on_open"
     }

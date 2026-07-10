@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Minimal client for the SYU vendor IPC (the `com.syu.ms` "toolkit" binder) to read the MCU's
- * current audio source — its `APP_ID`. This is the one signal that reflects EVERY source, including
+ * current audio source, its `APP_ID`. This is the one signal that reflects EVERY source, including
  * the FM radio and the unit's own players, which bypass Android audio focus entirely.
  *
  * Reverse-engineered from `com.fyt.screenbutton` (it reads APP_ID to highlight the active source):
@@ -39,7 +39,7 @@ class SyuLink(private val appContext: Context) {
     private var bound = false
     @Volatile private var registered = false
 
-    // Our IModuleCallback.Stub — receives update() transactions from the MCU service.
+    // Our IModuleCallback.Stub, which receives update() transactions from the MCU service.
     private val callback = object : Binder() {
         override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
             when (code) {
@@ -64,7 +64,7 @@ class SyuLink(private val appContext: Context) {
     private val conn = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             if (service == null) return
-            // Binder transactions block — never on the main thread.
+            // Binder transactions block; never on the main thread.
             Thread {
                 runCatching {
                     val main = getRemoteModule(service, MODULE_MAIN)
@@ -149,6 +149,6 @@ class SyuLink(private val appContext: Context) {
 
         const val MODULE_MAIN = 0              // FinalMainServer.MODULE_CODE_MAIN
         const val U_APP_ID = 0                 // FinalMain.U_APP_ID (update index of the source)
-        const val APP_ID_BTAV = 3              // FinalMain.APP_ID_BTAV — Bluetooth audio is active
+        const val APP_ID_BTAV = 3              // FinalMain.APP_ID_BTAV, Bluetooth audio is active
     }
 }

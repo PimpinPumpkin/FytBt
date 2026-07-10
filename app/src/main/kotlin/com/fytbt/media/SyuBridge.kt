@@ -15,7 +15,7 @@ import android.util.Log
  *  - `com.syu.bt.byav.force` -> MyService: received, but did NOT switch the source on its own.
  *  - `com.syu.bt.byav.widgetPlayPause` -> BtavPlayPauseService: THIS is the real lever. It makes
  *    the stock BtMusic component request audio focus, which drives the MCU to switch appId to 3
- *    (Bluetooth) — `Qin: UI Change AppId to 3`, `volBt=36`, local player muted. Side effect: it's
+ *    (Bluetooth): `Qin: UI Change AppId to 3`, `volBt=36`, local player muted. Side effect: it's
  *    a play/PAUSE toggle, so callers must re-assert play afterward to guarantee playback.
  *
  * All wrapped in runCatching so a unit without the stock app degrades to a no-op.
@@ -30,7 +30,7 @@ object SyuBridge {
     private const val SVC_PLAYPAUSE = "com.syu.broadcast.BtavPlayPauseService"
     private const val ACTION_WIDGET_PLAYPAUSE = "com.syu.bt.byav.widgetPlayPause"
 
-    // widgetPlayPause is a play/PAUSE TOGGLE — firing it twice in quick succession cancels out. Two
+    // widgetPlayPause is a play/PAUSE TOGGLE; firing it twice in quick succession cancels out. Two
     // independent callers can want to claim BT at almost the same moment (the UI on app-open AND the
     // coordinator service on the resulting APP_ID->3), so self-debounce here to guarantee a single
     // toggle per claim regardless of who calls.

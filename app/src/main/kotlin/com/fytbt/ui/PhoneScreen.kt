@@ -249,7 +249,7 @@ private fun Dialpad(
             Spacer(Modifier.height(6.dp))
         }
         Spacer(Modifier.height(8.dp))
-        // Big call button — vivid green so the primary action pops.
+        // Big call button: vivid green so the primary action pops.
         FilledIconButton(
             onClick = onCall,
             enabled = entered.isNotBlank(),

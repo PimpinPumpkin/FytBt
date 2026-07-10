@@ -88,7 +88,7 @@ fun BluetoothScreen(
     themeMode: ThemeMode,
     onSetThemeMode: (ThemeMode) -> Unit,
 ) {
-    // The whole page scrolls as one — the paired list renders all devices inline (rather than
+    // The whole page scrolls as one: the paired list renders all devices inline (rather than
     // being squeezed into a fixed weighted box), so it extends as far as it needs and the settings
     // below it are reached by scrolling instead of cramming everything onto one fixed screen.
     Column(
@@ -178,7 +178,7 @@ private fun ThemePicker(selected: ThemeMode, onSelect: (ThemeMode) -> Unit) {
 }
 
 /**
- * Setting: when ON (default), opening the app claims Bluetooth as the active source — it stops the
+ * Setting: when ON (default), opening the app claims Bluetooth as the active source: it stops the
  * radio and pauses on-unit players (like the stock BT app). It does not start playback; you press
  * play yourself. When OFF, opening the app leaves whatever's playing alone.
  */
@@ -493,7 +493,7 @@ private fun DiscoverableButton(
     val secs = (remainingMs / 1000).toInt()
 
     Column {
-        // FIXED height — a child with fillMaxHeight inside a min-height-only Box expands to fill
+        // FIXED height: a child with fillMaxHeight inside a min-height-only Box expands to fill
         // the whole column (that was the "huge bar" bug). Pin it.
         Box(
             modifier = Modifier
@@ -518,7 +518,7 @@ private fun DiscoverableButton(
                 )
             }
             Text(
-                text = if (discoverable) "Discoverable · ${secs / 60}:${"%02d".format(secs % 60)} left — tap to extend"
+                text = if (discoverable) "Discoverable · ${secs / 60}:${"%02d".format(secs % 60)} left, tap to extend"
                 else "Make discoverable",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -635,7 +635,7 @@ private fun PairedDeviceRow(
         modifier = rowModifier.padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Left accent bar — only visible when connected.
+        // Left accent bar, only visible when connected.
         Box(
             modifier = Modifier
                 .width(4.dp)

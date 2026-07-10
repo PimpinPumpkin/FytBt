@@ -33,7 +33,7 @@ import kotlinx.coroutines.launch
  * Lifecycle: call [register] in onStart and [unregister] in onStop. The controller does not
  * hold an Activity reference, so it survives configuration changes when hoisted in a ViewModel.
  *
- * Hidden-API calls (`removeBond`, A2DP-sink connection state) are best-effort — they catch
+ * Hidden-API calls (`removeBond`, A2DP-sink connection state) are best-effort: they catch
  * [ReflectiveOperationException] and fall through quietly so a blocked call doesn't crash.
  */
 @SuppressLint("MissingPermission") // permissions are gated through hasConnectPerm()/hasScanPerm()
@@ -47,7 +47,7 @@ class BluetoothController(private val appContext: Context) {
     private val _adapterEnabled = MutableStateFlow(adapter?.isEnabled == true)
     val adapterEnabled: StateFlow<Boolean> = _adapterEnabled.asStateFlow()
 
-    // scanMode requires BLUETOOTH_SCAN — must NOT be read before the user grants it.
+    // scanMode requires BLUETOOTH_SCAN; must NOT be read before the user grants it.
     private val _scanMode = MutableStateFlow(BluetoothAdapter.SCAN_MODE_NONE)
     val scanMode: StateFlow<Int> = _scanMode.asStateFlow()
 
@@ -64,7 +64,7 @@ class BluetoothController(private val appContext: Context) {
     private val _discovered = MutableStateFlow<List<BtDevice>>(emptyList())
     val discovered: StateFlow<List<BtDevice>> = _discovered.asStateFlow()
 
-    /** Connection state per address for the A2DP sink profile — best-effort, may stay empty. */
+    /** Connection state per address for the A2DP sink profile. Best-effort, may stay empty. */
     private val _a2dpSinkConnected = MutableStateFlow<Set<String>>(emptySet())
     val a2dpSinkConnected: StateFlow<Set<String>> = _a2dpSinkConnected.asStateFlow()
 
@@ -131,7 +131,7 @@ class BluetoothController(private val appContext: Context) {
                     )
                     Log.i(TAG, "ACTION_BOND_STATE_CHANGED ${device?.address} $prevState -> $newState")
                     refreshPaired()
-                    // bondedDevices is briefly stale after the broadcast on some stacks — retry.
+                    // bondedDevices is briefly stale after the broadcast on some stacks, so retry.
                     scope?.launch {
                         delay(400)
                         refreshPaired()
@@ -143,7 +143,7 @@ class BluetoothController(private val appContext: Context) {
     }
 
     /**
-     * Register the BT broadcast receiver and refresh state. Safe to call repeatedly —
+     * Register the BT broadcast receiver and refresh state. Safe to call repeatedly:
      * receiver is only registered once, but state is re-read every call so a post-permission-grant
      * call picks up scanMode/bondedDevices that were unreadable before.
      */
@@ -254,7 +254,7 @@ class BluetoothController(private val appContext: Context) {
 
     fun startScan(): Boolean {
         if (!hasScanPerm() || !hasConnectPerm()) {
-            _scanError.value = "Permission missing — grant Bluetooth permissions."
+            _scanError.value = "Permission missing. Grant Bluetooth permissions."
             Log.w(TAG, "startScan denied: scanPerm=${hasScanPerm()} connectPerm=${hasConnectPerm()}")
             return false
         }
@@ -290,7 +290,7 @@ class BluetoothController(private val appContext: Context) {
     }
 
     /**
-     * Fires ACTION_REQUEST_DISCOVERABLE. The OS caps duration at 300s — anything higher is ignored.
+     * Fires ACTION_REQUEST_DISCOVERABLE. The OS caps duration at 300s; anything higher is ignored.
      * Returns false if no adapter / no permission. Record window start so UI can run a countdown
      * even before ACTION_SCAN_MODE_CHANGED arrives.
      */
@@ -314,10 +314,10 @@ class BluetoothController(private val appContext: Context) {
     }
 
     /**
-     * Cancel the active discoverable window early. Tries reflective `setScanMode(SCAN_MODE_CONNECTABLE)`
-     * — works on AOSP/UNISOC where the method is exposed without BLUETOOTH_PRIVILEGED. Returns true
+     * Cancel the active discoverable window early. Tries reflective `setScanMode(SCAN_MODE_CONNECTABLE)`,
+     * which works on AOSP/UNISOC where the method is exposed without BLUETOOTH_PRIVILEGED. Returns true
      * if the call succeeded (the ACTION_SCAN_MODE_CHANGED broadcast will confirm). Otherwise just
-     * clears our local countdown — the OS will still let the existing window expire on its own.
+     * clears our local countdown; the OS will still let the existing window expire on its own.
      */
     fun stopDiscoverable(): Boolean {
         val a = adapter ?: return false
@@ -330,7 +330,7 @@ class BluetoothController(private val appContext: Context) {
             ok
         } catch (t: Throwable) {
             Log.w(TAG, "stopDiscoverable reflection blocked: ${t.javaClass.simpleName}: ${t.message}")
-            // We can't actually cancel without privileged access — at minimum drop the countdown
+            // We can't actually cancel without privileged access; at minimum drop the countdown
             // so the UI stops showing one. The OS will time out on its own.
             _discoverableUntil.value = null
             false

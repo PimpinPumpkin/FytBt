@@ -1,7 +1,7 @@
-# FYT head-unit findings — how this hardware actually works
+# FYT head-unit findings: how this hardware actually works
 
 Hard-won, on-device reverse-engineering notes for the **WDFL-Car FYT head unit** (bought on
-AliExpress) that FytBt targets. This is the "why" behind the code — especially the parts that took
+AliExpress) that FytBt targets. This is the "why" behind the code, especially the parts that took
 a lot of trial and error to figure out, because almost none of it is documented anywhere.
 
 > Everything here was determined empirically over wireless `adb` on the actual unit, by reading
@@ -19,11 +19,11 @@ a lot of trial and error to figure out, because almost none of it is documented 
 | Board / build | `uis7870sc_2h10`, fingerprint `UNISOC/uis7870sc_2h10_nosec/...:13/TP1A.220624.014/...`, built 2026-01-26 |
 | OS | Android **13** (API 33), AOSP, **non-rooted**, `secure_boot.state=0` (`_nosec` build) |
 | Screen | Portrait **768 × 1024** ("Tesla-style" vertical), finger-operated |
-| Debugging | **Wireless adb only** — no usable USB-data port. The adb port **rolls on every reboot** (`adb connect 192.168.158.192:<port>`). `adb input tap` works. |
+| Debugging | **Wireless adb only**: no usable USB-data port. The adb port **rolls on every reboot** (`adb connect 192.168.158.192:<port>`). `adb input tap` works. |
 
 The Android Bluetooth/media/telephony stacks are essentially stock AOSP and *work*. What's broken
 is the vendor's **`com.syu.bt`** UI (can't set device name, can't pair, shows nothing connected).
-FytBt sidesteps the broken UI by driving the working stack directly — no root, runs alongside the
+FytBt sidesteps the broken UI by driving the working stack directly: no root, runs alongside the
 stock apps, can't uninstall them.
 
 ---
@@ -43,7 +43,7 @@ else is muted at the hardware mux.
 - Conversely, holding/losing Android audio focus does **not** move the MCU source.
 
 This one fact invalidated three earlier auto-pause designs (see §6). The only signal that reflects
-**every** source — radio, AUX, the unit's Spotify, the Bluetooth phone — is the MCU's `APP_ID`.
+**every** source (radio, AUX, the unit's Spotify, the Bluetooth phone) is the MCU's `APP_ID`.
 
 ### APP_ID values (from `com.syu.ipc.data.FinalMain`)
 
@@ -52,7 +52,7 @@ This one fact invalidated three earlier auto-pause designs (see §6). The only s
 | 0 | NULL (none) | 8 | AUDIO_PLAYER (on-unit) |
 | 1 | RADIO | 9 | VIDEO_PLAYER |
 | 2 | BTPHONE (HFP call) | 10 | THIRD_PLAYER (e.g. **Spotify-on-unit**) |
-| **3** | **BTAV (Bluetooth A2DP — the phone)** | 11 | CAR_RADIO |
+| **3** | **BTAV (Bluetooth A2DP, the phone)** | 11 | CAR_RADIO |
 | 4 | DVD | 12 | CAR_BTPHONE |
 | 5 | AUX (e.g. `com.syu.av`) | 13 | CAR_USB |
 | 6 | TV | 14 | DVR |
@@ -64,11 +64,11 @@ else took over.
 > **Niche detail:** `APP_ID` reflects which *input is selected*, not whether it's playing. It stays
 > `3` while Bluetooth is the chosen source even if the phone is paused/stopped. It only changes when
 > a **different** source grabs the MCU. (This is why launching the radio's *UI* alone doesn't change
-> it — the radio has to actually become the active source.)
+> it: the radio has to actually become the active source.)
 
 ---
 
-## 2. Reading the MCU source live — the SYU vendor IPC
+## 2. Reading the MCU source live: the SYU vendor IPC
 
 To react to source changes we need to read `APP_ID` in real time. There's no public API; we reverse
 -engineered the vendor binder framework `com.syu.ipc.*` from the panel-button app
@@ -108,11 +108,11 @@ MAIN module update index:  C_APP_ID / U_APP_ID = 0    (the active-source field)
 - **`getRemoteModule` uses transact flag `0`** (it returns a binder, so it's a normal two-way call
   and we read `reply.readStrongBinder()`); **`register` uses flag `1`**, matching how screenbutton
   calls it.
-- **Binder transactions block** — they must run off the main thread. `SyuLink` does the bind-time
+- **Binder transactions block**; they must run off the main thread. `SyuLink` does the bind-time
   registration on a worker `Thread`. The incoming `update` callbacks arrive on a binder thread; we
   just publish to a `StateFlow<Int?>`.
 - The whole thing is wrapped in `runCatching` and degrades to "never emits" if the stock app is
-  missing or the firmware differs — the app then simply doesn't auto-pause rather than crashing.
+  missing or the firmware differs; the app then just doesn't auto-pause rather than crashing.
 
 ### Verified on-device (logcat tag `FytBt`)
 
@@ -124,14 +124,14 @@ MCU APP_ID -> 3           # after we switched to Bluetooth
 ```
 
 `C_APP_ID` is a *status* field (read-only from our side). We never write it; the radio/players set
-it when they grab the source. (Switching the source *to* Bluetooth is done a different way — §5.)
+it when they grab the source. (Switching the source *to* Bluetooth is done a different way; see §5.)
 
 ---
 
 ## 3. The auto-pause / resume mechanism (what the user actually wanted)
 
-Goal: **when you switch to the radio (or any other source), pause the phone — and the unit's own
-music/Spotify — automatically; when you switch back, resume.** And never fight a manual pause.
+Goal: **when you switch to the radio (or any other source), pause the phone (and the unit's own
+music/Spotify) automatically; when you switch back, resume.** And never fight a manual pause.
 
 Implemented in
 [`app/.../media/SourceCoordinatorService.kt`](app/src/main/kotlin/com/fytbt/media/SourceCoordinatorService.kt).
@@ -152,13 +152,13 @@ Implemented in
 ### Resuming Bluetooth must re-route through the STOCK path, not a bare play()
 
 The subtle one. After the coordinator pauses the phone for another source, just calling `play()` on
-the BT session when the source returns leaves it **silent** — the phone shows "playing" (and the MCU
+the BT session when the source returns leaves it **silent**: the phone shows "playing" (and the MCU
 source is back to APP_ID 3) but **no audio comes out for ~10 s**, until a manual pause/play toggle on
 the stereo kicks it. Two things are going on:
 
 1. **Routing needs the stock BtMusic component to re-grab focus and re-assert the sink.** That's what
    a manual toggle does, and it's the `widgetPlayPause` lever (§5). A bare AVRCP `play()` from us
-   doesn't trigger it. (First wrong guess: have *our* app grab `AUDIOFOCUS_GAIN` and `play()` — that
+   doesn't trigger it. (First wrong guess: have *our* app grab `AUDIOFOCUS_GAIN` and `play()`; that
    put focus on `com.fytbt`, not stock BtMusic, and stayed silent. The working state has **`com.syu.bt`
    holding focus**, not us.)
 2. **A focus-holding local player blocks the sink.** A local app that uses audio focus (e.g.
@@ -171,19 +171,19 @@ the stereo kicks it. Two things are going on:
    09:28:44  abandonAudioFocus from io.github.zyrouge.symphony   # Symphony evicted → audio returns
    ```
 
-**Fix:** on a BT resume, [`SourceCoordinatorService`] does what a manual toggle does — grab focus
+**Fix:** on a BT resume, [`SourceCoordinatorService`] does what a manual toggle does: grab focus
 (evicts the stale local holder) **then fire the `widgetPlayPause` lever** ([`SyuBridge`]) and assert
-`play()` a beat later. We never *react* to focus changes — the A2DP sink toggles focus during normal
+`play()` a beat later. We never *react* to focus changes: the A2DP sink toggles focus during normal
 playback, so reacting would kill our own audio (§6). Radio/Spotify never showed this (radio bypasses
-focus; Spotify releases it promptly) — only a focus-holding local player like Symphony exposes it.
+focus; Spotify releases it promptly); only a focus-holding local player like Symphony exposes it.
 
 **Verified objectively** with a mic pointed at the unit's output (`ffmpeg -af volumedetect`,
 max_volume): BT playing ≈ **−18 dB**, BT paused ≈ **−43 dB**. After auto-resume: **−17.9 dB**; after
-claim-on-open: **−21.4 dB** — i.e. real audio, not the silent floor.
+claim-on-open: **−21.4 dB**, i.e. real audio, not the silent floor.
 
 ### Claiming Bluetooth on app-open (take over, but DON'T start playing)
 
-Opening the app **claims Bluetooth as the active source but does NOT start playback** — it fires the
+Opening the app **claims Bluetooth as the active source but does NOT start playback**: it fires the
 `widgetPlayPause` lever (kills the radio), the coordinator pauses on-unit players (Symphony), and the
 phone is left **paused** (you press play yourself). It only claims when BT **isn't already** the
 active source (`SourceCoordinatorService.currentAppId != 3`). Verified by mic: open-from-AUX measures
@@ -195,7 +195,7 @@ settles (the lever is a play/pause toggle, so a paused phone could otherwise fli
 coordinator consumes the suppress flag on the resulting `APP_ID → 3` and **skips its auto-resume**, so
 the two paths don't fight to play. [`SyuBridge`] also self-debounces (1.5 s) so the UI claim and any
 coordinator follow-up fire a single toggle (`switchSourceToBluetooth: debounced (46ms since last)`).
-The explicit play button uses `claimBtAudio(play = true)` — switch source **and** play (routes audio).
+The explicit play button uses `claimBtAudio(play = true)`: switch source **and** play (routes audio).
 
 ### The golden rule (learned through painful regressions)
 
@@ -224,15 +224,15 @@ MCU APP_ID -> 3
 source -> Bluetooth: resume phone              # ✅ phone resumed when source returned
 ```
 
-Golden-rule check — phone **manually** paused first, then the same `3→5→3` churn:
+Golden-rule check: phone **manually** paused first, then the same `3→5→3` churn:
 
 ```
 MCU APP_ID -> 5
 MCU APP_ID -> 3
-# (no pause/resume lines at all — a manual pause is left alone) ✅
+# (no pause/resume lines at all; a manual pause is left alone) ✅
 ```
 
-Survival check — **finish the Activity**, process + foreground service stay alive, repeat the round
+Survival check: **finish the Activity**, process + foreground service stay alive, repeat the round
 trip → pause/resume **still fire** with no UI present. ✅
 
 > The Bluetooth-phone path is fully validated on-device. The on-unit-player path (Spotify-on-unit
@@ -246,12 +246,12 @@ trip → pause/resume **still fire** with no UI present. ✅
 Triggering real source changes for testing is fiddly, because most sources only grab the MCU when
 they *actually play*:
 
-- **Launching the radio UI does nothing** to `APP_ID` — and its launch component is
+- **Launching the radio UI does nothing** to `APP_ID`, and its launch component is
   `com.syu.carradio/.ActivityLauncher`, **not** `.MainActivity` (a wrong guess silently no-ops).
-- **`adb shell monkey -p com.syu.av 1`** (the stock AV/AUX app) **does** flip `APP_ID → 5` reliably
-  — this is the handiest "switch away from Bluetooth" lever for testing.
+- **`adb shell monkey -p com.syu.av 1`** (the stock AV/AUX app) **does** flip `APP_ID → 5` reliably;
+  this is the handiest "switch away from Bluetooth" lever for testing.
 - **`adb shell cmd media_session dispatch play|pause`** dispatches to the highest-priority session
-  (usually the Bluetooth one when it's playing) — good for getting the phone "playing" first.
+  (usually the Bluetooth one when it's playing); good for getting the phone "playing" first.
 - Switch the source **to Bluetooth** with the `widgetPlayPause` service (§5).
 
 Inspect state: `adb shell dumpsys media_session | grep -E 'package=|state=PlaybackState'`
@@ -261,7 +261,7 @@ Inspect state: `adb shell dumpsys media_session | grep -E 'package=|state=Playba
 
 ## 5. Getting Bluetooth audio to actually come out (the "silent audio" saga)
 
-For a long time, phone audio over A2DP was **silent until you opened the stock Bluetooth app** — even
+For a long time, phone audio over A2DP was **silent until you opened the stock Bluetooth app**, even
 though the phone was connected and the AVRCP session was live. This took many wrong turns.
 
 - The unit is the **A2DP _sink_**; the BT stack even grabs/releases Android audio focus by itself.
@@ -272,7 +272,7 @@ though the phone was connected and the AVRCP session was live. This took many wr
   This makes the stock BtMusic component request the source, and the MCU logs
   `Qin: UI Change AppId to 3`, `volBt=36`, local player muted → **sound**.
 - **Dead end:** `com.syu.bt.byav.force` → `MyService` is *received but does not switch the source*
-  on its own. An earlier "it worked!" was misattributed — it only worked because the stock app had
+  on its own. An earlier "it worked!" was misattributed: it only worked because the stock app had
   just been opened. (We kept `byav.force` in `SyuBridge` alongside `widgetPlayPause`; the latter is
   the one that matters.)
 - **Gotcha:** `widgetPlayPause` is a play/**pause toggle**, so it flips playback as a side effect of
@@ -280,7 +280,7 @@ though the phone was connected and the AVRCP session was live. This took many wr
   cancels out (we debounce ~1.5 s).
 
 Diagnosing this meant watching the vendor **`sound`/`Qin`** MCU log tags (they print `audioType`,
-`volBt`, `mutePlayer`, `appid`) while toggling things — that's where `appid:3` first showed up and
+`volBt`, `mutePlayer`, `appid`) while toggling things; that's where `appid:3` first showed up and
 pointed us at the whole MCU-source model.
 
 ---
@@ -302,28 +302,28 @@ A record of the dead-ends so nobody re-treads them:
    `content==UNKNOWN` (e.g. the Symphony player).
 5. **Competing-MediaSession monitoring (v2).** Register a `MediaController.Callback` on every active
    session that isn't us/Bluetooth; pause the phone when one starts. Catches anything *with a
-   MediaSession* (NavRadio `com.navimods.radio_free`, Spotify, Symphony) — but **NOT the stock FM
+   MediaSession* (NavRadio `com.navimods.radio_free`, Spotify, Symphony), but **NOT the stock FM
    radio `com.syu.carradio`**, which has no MediaSession (it's MCU/analog). That blind spot is
    exactly why we went to the MCU `APP_ID` (§2/§3), which sees *everything*. v2 is fully superseded.
 
 ---
 
-## 7. Album art over Bluetooth — phone- AND app-dependent
+## 7. Album art over Bluetooth: phone- AND app-dependent
 
 Art arrives over **AVRCP cover art (BIP)** as a **`content://` URI from `AvrcpCoverArtProvider`**,
-not an inline bitmap — load it via `ContentResolver`.
+not an inline bitmap; load it via `ContentResolver`.
 
 - **Sends art:** NewPipe on a stock Pixel.
-- **Doesn't:** **Spotify** (confirmed `mCoverArtHandle=null` *and* no track duration — Spotify is
+- **Doesn't:** **Spotify** (confirmed `mCoverArtHandle=null` *and* no track duration; Spotify is
   stingy with AVRCP metadata), NewPipe on GrapheneOS, and **iOS** (text metadata only, never the
-  image — an Apple limitation).
-- **Fix — online fallback:** when the phone sends no BT art, look it up by title+artist via Apple's
+  image, an Apple limitation).
+- **Fix (online fallback):** when the phone sends no BT art, look it up by title+artist via Apple's
   **iTunes Search API** (free, no key, 600×600). Verified for Spotify. A token-overlap matcher
   (weighted title 0.65 / artist 0.35) rejects weak matches.
   ([`OnlineArt.kt`](app/src/main/kotlin/com/fytbt/media/OnlineArt.kt))
 - **Disk-cached** ([`ArtCache.kt`](app/src/main/kotlin/com/fytbt/media/ArtCache.kt),
   `filesDir/artcache_v2`, JPEG keyed by hash of `artist|title`): cache is checked **first** (works
-  offline), network only on a miss. A track fetched once on WiFi shows art offline forever after —
+  offline), network only on a miss. A track fetched once on WiFi shows art offline forever after,
   important because the unit is usually offline while driving.
 - **Gap:** brand-new tracks while fully offline get no art. The only fully-offline answer is a
   companion phone app pushing the phone's MediaSession art over a BT RFCOMM socket (not built).
@@ -338,16 +338,16 @@ not an inline bitmap — load it via `ContentResolver`.
   (settable via `adapter.name`, what the discoverable banner shows) and pairing all work over the
   standard APIs even though the stock UI can't do them.
 - **Bind the AVRCP session via `MediaBrowser` to
-  `com.android.bluetooth/.avrcpcontroller.BluetoothMediaBrowserService`** — *not* `getActiveSessions`.
+  `com.android.bluetooth/.avrcpcontroller.BluetoothMediaBrowserService`**, *not* `getActiveSessions`.
   When the phone pauses, the unit's own Spotify session **floats up** in `getActiveSessions`, so
   picking "the first active session" for the *display* would wrongly show on-unit Spotify. (For
   *coordination* we still use `getActiveSessions`, but we filter by package, so ordering is moot.)
-- **AVRCP seek is not honored** — the source advertises `ACTION_SEEK_TO` but dragging snapped back.
+- **AVRCP seek is not honored**: the source advertises `ACTION_SEEK_TO` but dragging snapped back.
   The playhead is therefore **display-only**.
-- Steering-wheel media keys already work through the system MediaSession/AVRCP layer — no app
+- Steering-wheel media keys already work through the system MediaSession/AVRCP layer; no app
   handling needed.
 - Other exported `com.syu.bt` bits: `BtavNextService` / `BtavPrevService` (UI-less transport),
-  `ActBtAvStart` (action `com.syu.btav`, opens the stock UI — avoid).
+  `ActBtAvStart` (action `com.syu.btav`, opens the stock UI; avoid).
 
 ---
 
@@ -373,9 +373,9 @@ Dialing routes to the stock app: `dial()` → `ACTION_CALL` (if `CALL_PHONE` gra
 ## 10. The microphone wedge (out of scope, documented for sanity)
 
 **A Bluetooth HFP call kills the unit's built-in microphone globally until reboot.** Not just the
-call uplink — *all* local capture reads digital silence (−91 dB) afterward, proven with a recorder.
+call uplink: *all* local capture reads digital silence (−91 dB) afterward, proven with a recorder.
 It's a vendor UNISOC/SPRD audio-DSP (AGDSP) capture wedge below the userspace HAL; on hangup the
-route looks healthy but the ADC/AGDSP capture chain stays stuck. **No no-root recovery exists** —
+route looks healthy but the ADC/AGDSP capture chain stays stuck. **No no-root recovery exists**:
 every software lever (re-open AudioRecord, BT off/on, HAL restart, framework restart, DSP-reset
 props) fails; **only a reboot** restores it (verified causal).
 
@@ -384,15 +384,15 @@ props) fails; **only a reboot** restores it (verified causal).
   engages the unit codec, so the wedge can't fire); music keeps streaming over A2DP.
 - FytBt **cannot** fix or avoid this itself: disabling the unit's HFP profile or dropping the call
   needs `BLUETOOTH_PRIVILEGED` (system/signature), which a sideloaded app can't hold.
-- The real fix is **root** (no bootloader unlock needed on this unit — fastboot boot-image patch);
+- The real fix is **root** (no bootloader unlock needed on this unit: fastboot boot-image patch);
   a call-end hook could cold-reload the AGDSP. See the project memory note for the full teardown.
 
 ---
 
-## 11. Quick reference — diagnostic commands
+## 11. Quick reference: diagnostic commands
 
 ```bash
-# connect (port rolls every reboot — read it from Settings → Wireless debugging)
+# connect (port rolls every reboot; read it from Settings → Wireless debugging)
 adb connect 192.168.158.192:<port>
 
 # build / install / launch

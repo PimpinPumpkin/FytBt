@@ -71,7 +71,7 @@ fun ContactsScreen(
 
         if (contacts.isEmpty()) {
             InfoCard(
-                "No contacts. They sync from your phone over Bluetooth — make sure “share " +
+                "No contacts. They sync from your phone over Bluetooth. Make sure “share " +
                     "contacts” is on and the phone is paired."
             )
             return@Column

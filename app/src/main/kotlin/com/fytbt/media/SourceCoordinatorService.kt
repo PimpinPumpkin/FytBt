@@ -27,10 +27,10 @@ import kotlinx.coroutines.launch
  * Foreground service that keeps the **MCU-source ↔ media coordination** alive independently of the
  * UI. This is the reliability backbone of the auto-pause feature: it must keep running while the
  * user is on the radio / a local player (i.e. while our Activity is backgrounded or even destroyed),
- * which a plain Activity-owned monitor can't guarantee — Android may tear a stopped Activity down
+ * which a plain Activity-owned monitor can't guarantee; Android may tear a stopped Activity down
  * under memory pressure. A foreground service is the only no-root way to stay resident.
  *
- * How it works (all reverse-engineered on-device — see FINDINGS.md):
+ * How it works (all reverse-engineered on-device; see FINDINGS.md):
  *   - [SyuLink] reads the MCU's active audio source (its `APP_ID`) live over the SYU vendor IPC.
  *     This is the ONE signal that reflects EVERY source, because the FM radio and the unit's own
  *     players bypass Android audio focus entirely but still set the MCU APP_ID.
@@ -42,7 +42,7 @@ import kotlinx.coroutines.launch
  *     paused, and remembered, so it can be resumed when its source comes back.
  *
  * Golden rule (learned through painful regressions): we ONLY ever resume a source we ourselves
- * auto-paused. A deliberate manual pause is never overridden — if it wasn't playing when the source
+ * auto-paused. A deliberate manual pause is never overridden: if it wasn't playing when the source
  * switched away, it isn't in our paused-set, so it's never auto-resumed.
  *
  * Control + state both go through [MediaSessionManager.getActiveSessions] (requires the
@@ -63,7 +63,7 @@ class SourceCoordinatorService : Service() {
         applicationContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     }
     private var focusRequest: AudioFocusRequest? = null
-    // We NEVER react to focus changes (see FINDINGS.md §6 — the A2DP sink grabs/releases focus as
+    // We NEVER react to focus changes (see FINDINGS.md §6: the A2DP sink grabs/releases focus as
     // normal playback, so reacting to a loss would kill the very audio we want). We request focus
     // only to *evict* a local app that's still holding it; the listener is a deliberate no-op.
     private val focusListener = AudioManager.OnAudioFocusChangeListener { /* no-op by design */ }
@@ -127,14 +127,14 @@ class SourceCoordinatorService : Service() {
      * Reconcile playback to the new MCU source. See the class doc for the model.
      *
      * The pause side is plain [android.media.session.MediaController] transport calls. The RESUME
-     * side is the subtle one: just calling play() on the BT session leaves it **silent** — the phone
+     * side is the subtle one: just calling play() on the BT session leaves it **silent**: the phone
      * shows "playing" but no audio comes out for ~10 s. Routing on this unit requires the STOCK
      * BtMusic component to grab audio focus and re-assert the sink (exactly what a manual pause/play
      * toggle on the stereo does), which is the `widgetPlayPause` lever in [SyuBridge]. So on a BT
      * resume we fire that lever (+ grab focus first to evict any local app like Symphony still
      * holding it, which would otherwise suppress the sink) and assert play a beat later. We never
      * *react* to focus changes (the sink toggles focus during normal playback; reacting would kill
-     * our own audio — FINDINGS.md §6).
+     * our own audio; FINDINGS.md §6).
      */
     private fun coordinate(appId: Int) {
         currentAppId = appId
@@ -158,7 +158,7 @@ class SourceCoordinatorService : Service() {
                 btPausedByMcu = false
                 if (suppressed) {
                     // App-open take-over: the UI already switched the source and is asserting pause.
-                    // Don't auto-play — opening the app must not start a phone you didn't start.
+                    // Don't auto-play: opening the app must not start a phone you didn't start.
                     Log.i(TAG, "source -> Bluetooth: auto-resume suppressed (app-open take-over)")
                 } else {
                     // Route audio the way the stock app does. Bare play() here is silent for ~10s; the
@@ -180,7 +180,7 @@ class SourceCoordinatorService : Service() {
                 btPausedByMcu = true
                 Log.i(TAG, "source -> appId=$appId: pause phone (Bluetooth)")
             }
-            // We're no longer the Bluetooth source — don't keep holding focus.
+            // We're no longer the Bluetooth source, so don't keep holding focus.
             releaseFocus()
         }
 

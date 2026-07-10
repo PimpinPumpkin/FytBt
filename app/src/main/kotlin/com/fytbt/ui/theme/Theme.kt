@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.sp
 /** Light / dark / follow-the-system, chosen in Settings. */
 enum class ThemeMode { LIGHT, DARK, SYSTEM }
 
-// Tuned for a 768x1024 portrait car screen — high contrast, no thin grey-on-grey. primary/secondary
+// Tuned for a 768x1024 portrait car screen: high contrast, no thin grey-on-grey. primary/secondary
 // are overridden at runtime by the chosen accent, so only the neutrals matter here.
 private val CarDark = darkColorScheme(
     primary = Color(0xFF7AB7FF),
@@ -105,7 +105,7 @@ fun FytBtTheme(
 /**
  * Forced-dark theme for the Now Playing media screen. Its background is always the album art under a
  * dark scrim (or an accent-on-black gradient when there's no art), so it uses light text and a dark
- * surface regardless of the app's light/dark setting — exactly like every other media player.
+ * surface regardless of the app's light/dark setting, exactly like every other media player.
  */
 @Composable
 fun NowPlayingDarkTheme(accent: Int, content: @Composable () -> Unit) {

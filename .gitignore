@@ -11,6 +11,6 @@
 local.properties
 app/build/
 
-# Release keystores — never commit; live as CI secrets
+# Release keystores: never commit; live as CI secrets
 *.jks
 *.keystore
